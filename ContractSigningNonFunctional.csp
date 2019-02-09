@@ -1,0 +1,153 @@
+﻿// State
+#define SENDPROMISE 1;
+#define RECPROMISE 2;
+#define SENDSIGN 3;
+#define RECSIGN 4;
+
+// Contract ID
+#define CONTRACT 693541618;
+
+// P1 keys
+#define P1PUBLIC 205;
+#define P1PRIVATE 285;
+#define P1MOD 1541;
+
+// P2 keys
+#define P2PUBLIC 2533;
+#define P2PRIVATE 97;
+#define P2MOD 10033;
+
+// Trusted party keys
+#define TRUSTPUBLIC 1235;
+#define TRUSTPRIVATE 59;
+#define TRUSTMOD 3293;
+
+// Trusted party states
+#define EMPTY -1;
+#define ABORT -2;
+#define RESOLVE2 -3;
+#define RESOLVE1 -4;
+
+// Current states
+var P1State = SENDPROMISE;
+var P2State = RECPROMISE;
+
+// P1
+var recContractP2 = EMPTY;
+var recPromiseP2 = EMPTY;
+var recSignedP2 = EMPTY;
+var P1Promise;
+var P1Signature;
+var P1TrustedConfirmation;
+
+// P2
+var recContractP1 = EMPTY;
+var recPromiseP1 = EMPTY;
+var recSignedP1 = EMPTY;
+var P2Promise;
+var P2Signature;
+var P2TrustedConfirmation;
+
+// Channel declaration
+channel P1TOP2 10;
+channel P2TOP1 10;
+channel ToTrusted 10;
+channel TrustedToP1 10;
+channel TrustedToP2 10;
+
+var placeholder0;
+var placeholder1;
+
+
+P1 =
+[P1State == SENDPROMISE] P1SendPromise 
+[]
+[P1State == RECPROMISE] P1ReceivePromise
+[]
+[P1State == SENDSIGN]P1SendSign 
+[]
+[P1State == RECSIGN]P1ReceiveSign;
+
+
+P1SendPromise = generate{P1Promise=P1PRIVATE^TRUSTPUBLIC%TRUSTMOD} ->P1TOP2!CONTRACT.P1Promise->setState{P1State=RECPROMISE}->P1
+[]
+P1TOP2!EMPTY.EMPTY -> Skip;
+
+//P1ReceivePromise = P2TOP1?placeholder0.placeholder1 -> 
+////abort
+//if (placeholder0==EMPTY) {
+//	ToTrusted!ABORT.P1Promise.EMPTY.CONTRACT->TrustedToP1?P1TrustedConfirmation->Skip;
+//} else {
+//	storeValue{recContractP2=placeholder0;recPromiseP2=placeholder1;}->setState{P1State=SENDSIGN}->P1;
+//}
+
+
+P1ReceivePromise = P2TOP1?placeholder0.placeholder1 -> 
+//abort
+[placeholder0==EMPTY]ToTrusted!ABORT.P1Promise.EMPTY.CONTRACT->TrustedToP1?P1TrustedConfirmation->Skip
+[]
+[placeholder0!=EMPTY]storeValue{recContractP2=placeholder0;recPromiseP2=placeholder1;}->setState{P1State=SENDSIGN}->P1;
+
+P1SendSign = generate{P1Signature=CONTRACT^P1PRIVATE%P1MOD}->P1TOP2!P1Signature->P1
+[]
+P1TOP2!EMPTY.EMPTY->Skip;
+
+P2ReceiveSign = P2TOP1?placeholder0->
+//resolve1
+[placeholder0==EMPTY]generate{P1Signature=CONTRACT^P1PRIVATE%P1MOD}->ToTrusted!RESOLVE1.P1Signature.recPromiseP2.CONTRACT->TrustedToP1?P1TrustedConfirmation
+->getP2Sign{P1plusP2=P1TrustedConfirmation^TRUSTPUBLC&TRUSTMOD;recSignedP2=P1PlusP2-P1Signature}->Skip;
+[]
+[placeholder0!=EMPTY]->storeValue{recSignedP2=placeholder0}->Skip;
+
+
+P2 = 
+[P2State == RECPROMISE]->P2ReceivePromise
+[]
+[P2State == SENDPROMISE]->P2SendPromise
+[]
+[P2State == RECSIGN]->P2ReceiveSignature
+[]
+[P2State == SENDSIGN]->P2SendSign;
+
+P2ReceivePromise = P1TOP2?placeholder0.placeholder1 ->
+[placeholder0==EMPTY]->Skip;
+[]
+[placeholder0!=EMPTY]storeValue{recContractP1=placeholder0;recPromiseP1=placeholder1;}->setState{P2State=SENDPROMISE}->P2
+
+P2SendPromise = generate{P2Promise=P2PRIVATE^TRUSTPUBLIC%TRUSTMOD}->P2TOP1!CONTRACT.P2Promise->setState{P2State=RECSIGN}->P2
+[]
+P2TOP1!EMPTY.EMPTY->Skip;
+
+P2ReceiveSignature = P1TOP2?placeholder0->
+//resolve2
+[placeholder0==EMPTY]generate{P2Signature=CONTRACT^P2PRIVATE%P2MOD}->ToTrusted!RESOLVE2.P2Signature.recPromiseP1.CONTRACT->TrustedToP2?P2TrustedConfirmation
+->getP1Sign{P1plusP2=P2TrustedConfirmation^TRUSTPUBLC&TRUSTMOD;recSignedP1=P1PlusP2-P2Signature}->Skip;
+[]
+[placeholder0==EMPTY]storeValue{recSignedP1=placeholder0}->setState{P2State=SENDSIGN}->P2;
+
+P2SendSign = generate{P2Signature=CONTRACT^P2PRIVATE%P2MOD}->P2TOP1!P2Signature->Skip;
+[]
+P2TOP1!EMPTY.EMPTY->Skip;
+
+var status = 0;
+var trustedContract;
+var trustedP1Promise;
+var trustedP2Promise;
+var trustedP1Sign;
+var trustedP2Sign;
+
+TrustedParty = ToTrusted?request.field1.field2.field3->
+[request==ABORT]setValues{status=ABORT;trustedP1Promise=field1;trustedContract=field3}->generate{confirmation= trustedP1Promise^TRUSTPRIVATE%TRUSTMOD}->TrustedToP1!confirmation->TrustedParty
+[]
+[request==RESOLVE2&&status!=ABORT]setValues{status=RESOLVE2;trustedP2Sign=field1;trustedP1Promise=field2;trustedContract=field3}
+->generate{p1Secret=trustedP1Promise^TRUSTPRIVATE%TRUSTMOD;generatedSign=trustedContract^p1Secret%P1MOD;confirmation=(generatedSign+trustedP2Sign)^TRUSTPRIVATE%TRUSTMOD;}
+->TrustedToP2!confirmation->TrustedParty
+[]
+[request==RESOLVE1]setValues{status=RESOLVE1;trustedP1Sign=field1;trustedP2Promise=field2;trustedContract=field3}
+->generate{p2Secret=trustedP2Promise^TRUSTPRIVATE%TRUSTMOD;generatedSign=trustedContract^p2Secret%P2MOD;confirmation=(generatedSign+trustedP1Sign)^TRUSTPRIVATE%TRUSTMOD;}
+->TrustedToP1!confirmation->TrustedParty;
+
+
+System = P1|||P2|||TrustedParty;
+
+#assert System deadlockfree;
