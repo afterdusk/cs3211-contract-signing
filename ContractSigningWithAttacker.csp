@@ -35,6 +35,8 @@
 #define RESOLVE1TYPE -5;
 #define RESOLVE2TYPE -6;
 #define CONFIRMATIONTYPE -7;
+#define ABORTEXISTTYPE -8;
+#define RESOLVEEXISTTYPE -9;
 	//Encoded Identities
 #define P1IP 1;
 #define P2IP 2;
@@ -49,14 +51,14 @@ var P1RecPromise = EMPTY;
 var P1RecSignature = EMPTY;
 var P1Promise;
 var P1Signature;
-var P1TrustedConfirmation;
+var P1TrustedConfirmation=EMPTY;
 
 // P2
 var P2RecPromise = EMPTY;
 var P2RecSignature = EMPTY;
 var P2Promise;
 var P2Signature;
-var P2TrustedConfirmation;
+var P2TrustedConfirmation=EMPTY;
 
 // Channel declaration
 channel P1TOROUTER 10;
@@ -119,9 +121,7 @@ P1ReceivePromiseAction(field1,field2,field3,field4,field5,field6)=
 		//ABORT
 		P1TOROUTER!P1IP.TRUSTEDIP.ABORTTYPE.P1Promise.EMPTY.CONTRACT
 		->ROUTERTOP1?field1.field2.field3.field4.field5.field6
-		->P1SaveConfirmation{P1TrustedConfirmation = field4} 
-		->P1SetStateE{P1State=END}
-		->P1
+		->P1ReceiveTrustedAbortConfirmation(field1,field2,field3,field4,field5,field6)
 	}
 	else
 	{
@@ -129,6 +129,23 @@ P1ReceivePromiseAction(field1,field2,field3,field4,field5,field6)=
 		->P1SetStateSS{P1State=SENDSIGN}
 		->P1
 	};
+	
+	
+P1ReceiveTrustedAbortConfirmation(field1,field2,field3,field4,field5,field6) =
+	if(field3==RESOLVEEXISTTYPE)
+	{
+		P1SetState{P1State=END}
+		->P1
+	}
+	else if(field3==CONFIRMATIONTYPE)
+	{
+		P1SaveConfirmation{P1TrustedConfirmation = field4} 
+		->P1SetStateE{P1State=END}
+		->P1
+	};
+	
+
+
 
 P1SendSign =
 	P1TOROUTER!P1IP.P2IP.SIGNTYPE.P1Signature.EMPTY.EMPTY
@@ -147,16 +164,27 @@ P1ReceiveSignatureAction(field1,field2,field3,field4,field5,field6)=
 	{
 		//resolve1
 		P1TOROUTER!P1IP.TRUSTEDIP.RESOLVE1TYPE.P1Signature.P1RecPromise.CONTRACT
-		->ROUTERTOP2?field1.field2.field3.field4.field5.field6
-		->P1SaveConfirmation{P1TrustedConfirmation=field4}
-		->P1GetP1Sign{var P1PlusP2=call(Pow,P1TrustedConfirmation,TRUSTPUBLIC)%TRUSTMOD;P1RecSignature=P1PlusP2-P1Signature}
-		->P1SetStateE{P1State=END}
-		->P1
+		->ROUTERTOP1?field1.field2.field3.field4.field5.field6
+		->P1ReceiveTrustedResolve1Confirmation(field1,field2,field3,field4,field5,field6)
 	}
 	else
 	{
 		P1StoreSignature{P1RecSignature=field4}
 		->P1SetStateSS{P1State=SENDSIGN}
+		->P1
+	};
+	
+P1ReceiveTrustedResolve1Confirmation(field1,field2,field3,field4,field5,field6) =
+	if(field3==ABORTEXISTTYPE)
+	{
+		P1SetStateE{P1State=END}
+		->P1
+	}
+	else if(field3==CONFIRMATIONTYPE)
+	{
+		P1SaveConfirmation{P1TrustedConfirmation=field4}
+		->P1GetP1Sign{var P1PlusP2=call(Pow,P1TrustedConfirmation,TRUSTPUBLIC)%TRUSTMOD;P1RecSignature=P1PlusP2-P1Signature}
+		->P1SetStateE{P1State=END}
 		->P1
 	};
 
@@ -216,15 +244,27 @@ P2ReceiveSignatureAction(field1,field2,field3,field4,field5,field6)=
 		//resolve2
 		P2TOROUTER!P2IP.TRUSTEDIP.RESOLVE2TYPE.P2Signature.P2RecPromise.CONTRACT
 		->ROUTERTOP2?field1.field2.field3.field4.field5.field6
-		->P2SaveConfirmation{P2TrustedConfirmation=field4}
-		->P2GetP1Sign{var P1PlusP2=call(Pow,P2TrustedConfirmation,TRUSTPUBLIC)%TRUSTMOD;P2RecSignature=P1PlusP2-P2Signature}
-		->P2SetStateE{P2State=END}
-		->P2
+		->P2ReceiveTrustedResolve2Confirmation(field1,field2,field3,field4,field5,field6)
+
 	}
 	else
 	{
 		P2StoreSignature{P2RecSignature=field4}
 		->P2SetStateSS{P2State=SENDSIGN}
+		->P2
+	};
+	
+P2ReceiveTrustedResolve2Confirmation(field1,field2,field3,field4,field5,field6) =
+	if(field3==ABORTEXISTTYPE)
+	{
+		P2SetStateE{P2State=END}
+		->P2
+	}
+	else if(field3==CONFIRMATIONTYPE)
+	{
+		P2SaveConfirmation{P2TrustedConfirmation=field4}
+		->P2GetP1Sign{var P1PlusP2=call(Pow,P2TrustedConfirmation,TRUSTPUBLIC)%TRUSTMOD;P2RecSignature=P1PlusP2-P2Signature}
+		->P2SetStateE{P2State=END}
 		->P2
 	};
 
@@ -255,34 +295,58 @@ var result;
 
 TrustedParty =
 	ROUTERTOTRUSTED?field1.field2.field3.field4.field5.field6 -> TrustedPartyAction(field1,field2,field3,field4,field5,field6);
-
+	
 TrustedPartyAction(field1,field2,field3,field4,field5,field6)=
 	if(field3==ABORTTYPE)
 	{
-		setStatusAbort{trustedStatus=ABORTED}
-		->generateAbortConfirmation{confirmation=call(Pow,field4,TRUSTPRIVATE)%TRUSTMOD}
-		->TRUSTEDTOROUTER!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
-		->TrustedParty
+		if (trustedStatus==INIT) 
+		{
+			setStatusAbort{trustedStatus=ABORTED}
+			->generateAbortConfirmation{confirmation=call(Pow,field4,TRUSTPRIVATE)%TRUSTMOD}
+			->TRUSTEDTOROUTER!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
+			->TrustedParty
+		}
+		else if (trustedStatus==RESOLVE1TYPE || trustedStatus==RESOLVE2TYPE) 
+		{
+			TRUSTEDTOROUTER!TRUSTEDIP.field1.RESOLVEEXISTTYPE.EMPTY.EMPTY.EMPTY
+			->TrustedParty
+		}
 	}
-	else if(field3==RESOLVE2TYPE&&trustedStatus!=ABORTED)
+	else if(field3==RESOLVE2TYPE)
 	{
-		setStatusResolved2{trustedStatus=RESOLVE2TYPE}
-		->generateP1Private{generatedPrivate=call(Pow,field5,TRUSTPRIVATE)%TRUSTMOD}
-		->generateP1Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P1MOD}
-		->concatSignatures{result=generatedSignature+field4}
-		->generateResolved2Confirmation{confirmation=call(Pow,result,TRUSTPRIVATE)%TRUSTMOD}
-		->TRUSTEDTOROUTER!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
-		->TrustedParty
+		if (trustedStatus==INIT) 
+		{
+			setStatusResolved2{trustedStatus=RESOLVE2TYPE}
+			->generateP1Private{generatedPrivate=call(Pow,field5,TRUSTPRIVATE)%TRUSTMOD}
+			->generateP1Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P1MOD}
+			->concatSignatures{result=generatedSignature+field4}
+			->generateResolved2Confirmation{confirmation=call(Pow,result,TRUSTPRIVATE)%TRUSTMOD}
+			->TRUSTEDTOROUTER!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
+			->TrustedParty
+		}
+		else if (trustedStatus==ABORTED) 
+		{
+			TRUSTEDTOROUTER!TRUSTEDIP.field1.ABORTEXISTTYPE.EMPTY.EMPTY.EMPTY
+			->TrustedParty
+		}
 	}
 	else if(field3==RESOLVE1TYPE)
 	{
-		setStatusResolved1{trustedStatus=RESOLVE1TYPE}
-		->generateP2Private{generatedPrivate=call(Pow,field5,TRUSTPRIVATE)%TRUSTMOD}
-		->generateP2Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P2MOD}
-		->concatSignatures{result=generatedSignature+field4}
-		->generateResolved1Confirmation{confirmation=call(Pow,result,TRUSTPRIVATE)%TRUSTMOD}
-		->TRUSTEDTOROUTER!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
-		->TrustedParty
+		if (trustedStatus==INIT) 
+		{
+			setStatusResolved1{trustedStatus=RESOLVE1TYPE}
+			->generateP2Private{generatedPrivate=call(Pow,field5,TRUSTPRIVATE)%TRUSTMOD}
+			->generateP2Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P2MOD}
+			->concatSignatures{result=generatedSignature+field4}
+			->generateResolved1Confirmation{confirmation=call(Pow,result,TRUSTPRIVATE)%TRUSTMOD}
+			->TRUSTEDTOROUTER!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
+			->TrustedParty
+		}
+		else if (trustedStatus==ABORTED) 
+		{
+			TRUSTEDTOROUTER!TRUSTEDIP.field1.ABORTEXISTTYPE.EMPTY.EMPTY.EMPTY
+			->TrustedParty
+		}
 	};
 	
 
