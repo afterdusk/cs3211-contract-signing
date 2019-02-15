@@ -122,9 +122,9 @@ P1ReceivePromiseAction(field1, field2, field3, field4, field5, field6) =
 		// send abort if invalid promise received
 		p1ToRouter!P1IP.TRUSTEDIP.ABORTTYPE.p1Promise.EMPTY.CONTRACT
 		// receive abort confirmation from trusted party
-		-> routerToP1?field1.field2.field3.field4.field5.field6
+		-> routerToP1?f1.f2.f3.f4.f5.f6
 		// validate abort confirmation
-		-> P1ReceiveTrustedAbortConfirmation(field1, field2, field3, field4, field5, field6)
+		-> P1ReceiveTrustedAbortConfirmation(f1, f2, f3, f4, f5, f6)
 	}
 	else
 	{
@@ -165,9 +165,9 @@ P1ReceiveSignAction(field1, field2, field3, field4, field5, field6)=
 		// send resolve1 if invalid sign received
 		p1ToRouter!P1IP.TRUSTEDIP.RESOLVE1TYPE.p1Signature.p1RecPromise.CONTRACT
 		// receive resolve1 confirmation from trusted party
-		-> routerToP1?field1.field2.field3.field4.field5.field6
+		-> routerToP1?f1.f2.f3.f4.f5.f6
 		// validate resolve1 confirmation
-		-> P1ReceiveTrustedResolve1Confirmation(field1, field2, field3, field4, field5, field6)
+		-> P1ReceiveTrustedResolve1Confirmation(f1, f2, f3, f4, f5, f6)
 	}
 	else
 	{
@@ -245,9 +245,9 @@ P2ReceiveSignAction(field1, field2, field3, field4, field5, field6) =
 		// send resolve2 if invalid sign received
 		p2ToRouter!P2IP.TRUSTEDIP.RESOLVE2TYPE.p2Signature.p2RecPromise.CONTRACT
 		// receive resolve2 confirmation from trusted party
-		-> routerToP2?field1.field2.field3.field4.field5.field6
+		-> routerToP2?f1.f2.f3.f4.f5.f6
 		// validate resolve2 confirmation
-		-> P2ReceiveTrustedResolve2Confirmation(field1, field2, field3, field4, field5, field6)
+		-> P2ReceiveTrustedResolve2Confirmation(f1, f2, f3, f4, f5, f6)
 	}
 	else
 	{
@@ -353,9 +353,9 @@ TrustedPartyAction(field1, field2, field3, field4, field5, field6)=
 #define GARBAGE -69;
 
 RouterSelector() = 
-	Router()
+	secureRouter{var dummy;} -> Router()
 	[]
-	Attacker();
+	attacker{var dummy;} -> Attacker();
 
 //Router intialization
 Router() =
