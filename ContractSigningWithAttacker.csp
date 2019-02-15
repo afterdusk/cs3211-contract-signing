@@ -43,244 +43,243 @@
 #define TRUSTEDIP 3;
 
 // StartStates
-var P1State = GENERATE;
-var P2State = GENERATE;
+var p1State = GENERATE;
+var p2State = GENERATE;
 
 // P1
-var P1RecPromise = EMPTY;
-var P1RecSignature = EMPTY;
-var P1Promise;
-var P1Signature;
-var P1TrustedConfirmation=EMPTY;
+var p1RecPromise = EMPTY;
+var p1RecSign = EMPTY;
+var p1Promise;
+var p1Signature;
+var p1TrustedConfirmation=EMPTY;
 
 // P2
-var P2RecPromise = EMPTY;
-var P2RecSignature = EMPTY;
-var P2Promise;
-var P2Signature;
-var P2TrustedConfirmation=EMPTY;
+var p2RecPromise = EMPTY;
+var p2RecSignature = EMPTY;
+var p2Promise;
+var p2Signature;
+var p2TrustedConfirmation=EMPTY;
 
 // Channel declaration
-channel P1TOROUTER 10;
-channel P2TOROUTER 10;
-channel ROUTERTOP1 10;
-channel ROUTERTOP2 10;
-channel TRUSTEDTOROUTER 10;
-channel ROUTERTOTRUSTED 10;
+channel p1ToRouter 10;
+channel p2ToRouter 10;
+channel routerToP1 10;
+channel routerToP2 10;
+channel trustedToRouter 10;
+channel routerToTrusted 10;
 
 //Message encoding style
+
+// TODO: Put Contract in field4, always
+// TODO: Write the format for TrustedParty originated messages
+
 /*
-
-Msgtype:	Promise		Sign		Abort		Resolve1		Resolve2
-field 1:	Source IP(always)------------------------------------------------------------------------------------------------- 		
-field 2:	Dest Ip(always)---------------------------------------------------------------------------------------------------	
-field 3:	MSGTYPE(always)---------------------------------------------------------------------------------------------------
-field 4:	CONTRACT	SIGNATURE	P1PROMISE	P1SIGN			P2SIGN
-field 5:	PROMISE		EMPTY		EMPTY		P1RecPromise	P2RecPromise
-field 6:	EMPTY		EMPTY		CONTRACT	CONTRACT		CONTRACT
-
+	Msgtype:	Promise		Sign		Abort		Resolve1		Resolve2
+	field 1:	Source IP(always)------------------------------------------------ 		
+	field 2:	Dest Ip(always)--------------------------------------------------	
+	field 3:	MSGTYPE(always)--------------------------------------------------
+	field 4:	CONTRACT	SIGNATURE	P1PROMISE	P1SIGN			P2SIGN
+	field 5:	PROMISE		EMPTY		EMPTY		p1RecPromise	p2RecPromise
+	field 6:	EMPTY		EMPTY		CONTRACT	CONTRACT		CONTRACT
 */
 
 
 //Start of P1
 
-P1 =
-[P1State == GENERATE] P1GenerateValues
-[]
-[P1State == SENDPROMISE] P1SendPromise 
-[]
-[P1State == RECPROMISE] P1ReceivePromise
-[]
-[P1State == SENDSIGN]P1SendSign 
-[]
-[P1State == RECSIGN]P1ReceiveSign
-[]
-[P1State == END]Skip;
-
-P1GenerateValues = 
-	P1GeneratePromise{P1Promise=call(Pow,P1PRIVATE,TRUSTPUBLIC)%TRUSTMOD}
-	->P1GenerateSignature{P1Signature=call(Pow,CONTRACT,P1PRIVATE)%P1MOD}
-	->P1SetStateSP{P1State=SENDPROMISE}
-	->P1;
-	
-P1SendPromise =
-	P1TOROUTER!P1IP.P2IP.PROMISETYPE.CONTRACT.P1Promise.EMPTY
-	->P1SetStateRP{P1State=RECPROMISE}
-	->P1
+P1() =
+	[p1State == GENERATE]P1GenerateValues()
 	[]
-	P1TOROUTER!P1IP.P2IP.PROMISETYPE.EMPTY.EMPTY.EMPTY
-	->P1SetStateE{P1State=END}
-	->P1;
-	
-P1ReceivePromise = ROUTERTOP1?field1.field2.field3.field4.field5.field6 -> P1ReceivePromiseAction(field1,field2,field3,field4,field5,field6);
+	[p1State == SENDPROMISE]P1SendPromise()
+	[]
+	[p1State == RECPROMISE]P1ReceivePromise()
+	[]
+	[p1State == SENDSIGN]P1SendSign()
+	[]
+	[p1State == RECSIGN]P1ReceiveSign()
+	[]
+	[p1State == END]Skip;
 
-P1ReceivePromiseAction(field1,field2,field3,field4,field5,field6)=
-	if(field3!=PROMISETYPE||field4!=CONTRACT||field4==EMPTY||field5==EMPTY)
-	//Not Okay Conditions
+P1GenerateValues() = 
+	p1GeneratePromise{p1Promise = call(Pow, P1PRIVATE, TRUSTPUBLIC) % TRUSTMOD}
+	-> p1GenerateSignature{p1Signature = call(Pow, CONTRACT, P1PRIVATE) % P1MOD}
+	-> tau{p1State = SENDPROMISE}
+	-> P1();
+	
+P1SendPromise() =
+	p1ToRouter!P1IP.P2IP.PROMISETYPE.CONTRACT.p1Promise.EMPTY
+	-> tau{p1State = RECPROMISE}
+	-> P1()
+	[]
+	p1ToRouter!P1IP.P2IP.PROMISETYPE.EMPTY.EMPTY.EMPTY
+	-> p1Terminate{p1State = END}
+	-> P1();
+	
+P1ReceivePromise() = routerToP1?field1.field2.field3.field4.field5.field6 -> P1ReceivePromiseAction(field1, field2, field3, field4, field5, field6);
+
+P1ReceivePromiseAction(field1, field2, field3, field4, field5, field6) =
+	if (field3 != PROMISETYPE || field4 != CONTRACT || field4 == EMPTY || field5 == EMPTY)
 	{
-		//ABORT
-		P1TOROUTER!P1IP.TRUSTEDIP.ABORTTYPE.P1Promise.EMPTY.CONTRACT
-		->ROUTERTOP1?field1.field2.field3.field4.field5.field6
-		->P1ReceiveTrustedAbortConfirmation(field1,field2,field3,field4,field5,field6)
+		// send abort if invalid promise received
+		p1ToRouter!P1IP.TRUSTEDIP.ABORTTYPE.p1Promise.EMPTY.CONTRACT
+		// receive abort confirmation from trusted party
+		-> routerToP1?field1.field2.field3.field4.field5.field6
+		// validate abort confirmation
+		-> P1ReceiveTrustedAbortConfirmation(field1, field2, field3, field4, field5, field6)
 	}
 	else
 	{
-		P1StorePromise{P1RecPromise=field5}
-		->P1SetStateSS{P1State=SENDSIGN}
-		->P1
+		p1StoreReceivedPromise{p1RecPromise=field5}
+		-> tau{p1State = SENDSIGN}
+		-> P1()
 	};
 	
-	
-P1ReceiveTrustedAbortConfirmation(field1,field2,field3,field4,field5,field6) =
-	if(field3==RESOLVEEXISTTYPE)
+P1ReceiveTrustedAbortConfirmation(field1, field2, field3, field4, field5, field6) =
+	if (field3 == RESOLVEEXISTTYPE)
 	{
-		P1SetState{P1State=END}
-		->P1
+		// TODO: Run assertion to check for P2SIGN
+		p1AbortFail{p1State = END}
+		-> P1()
 	}
-	else if(field3==CONFIRMATIONTYPE)
+	else if (field3 == CONFIRMATIONTYPE)
 	{
-		P1SaveConfirmation{P1TrustedConfirmation = field4} 
-		->P1SetStateE{P1State=END}
-		->P1
+		// TODO: Why save field4?
+		p1StoreAbortConfirmation{p1TrustedConfirmation = field4} 
+		-> tau{p1State = END}
+		-> P1()
 	};
 	
-
-
-
-P1SendSign =
-	P1TOROUTER!P1IP.P2IP.SIGNTYPE.P1Signature.EMPTY.EMPTY
-	->P1SetStateRS{P1State=RECSIGN}
-	->P1
+P1SendSign() =
+	p1ToRouter!P1IP.P2IP.SIGNTYPE.p1Signature.EMPTY.EMPTY
+	-> tau{p1State = RECSIGN}
+	-> P1()
 	[]
-	P1TOROUTER!P1IP.P2IP.SIGNTYPE.EMPTY.EMPTY.EMPTY
-	->P1SetStateE{P1State=END}
-	->P1;
+	p1ToRouter!P1IP.P2IP.SIGNTYPE.EMPTY.EMPTY.EMPTY
+	-> p1Terminate{p1State=END}
+	-> P1();
 
-P1ReceiveSign = ROUTERTOP1?field1.field2.field3.field4.field5.field6 -> P1ReceiveSignatureAction(field1,field2,field3,field4,field5,field6);
+P1ReceiveSign() = routerToP1?field1.field2.field3.field4.field5.field6 -> P1ReceiveSignAction(field1, field2, field3, field4, field5, field6);
 
-P1ReceiveSignatureAction(field1,field2,field3,field4,field5,field6)=
-	if(field3!=SIGNTYPE||field4==EMPTY||call(Pow,field4,P2PUBLIC)%P2MOD!=CONTRACT)
-	//not okay
+P1ReceiveSignAction(field1, field2, field3, field4, field5, field6)=
+	if (field3 != SIGNTYPE || field4 == EMPTY || call(Pow, field4, P2PUBLIC) % P2MOD != CONTRACT)
 	{
-		//resolve1
-		P1TOROUTER!P1IP.TRUSTEDIP.RESOLVE1TYPE.P1Signature.P1RecPromise.CONTRACT
-		->ROUTERTOP1?field1.field2.field3.field4.field5.field6
-		->P1ReceiveTrustedResolve1Confirmation(field1,field2,field3,field4,field5,field6)
+		// send resolve1 if invalid sign received
+		p1ToRouter!P1IP.TRUSTEDIP.RESOLVE1TYPE.p1Signature.p1RecPromise.CONTRACT
+		// receive resolve1 confirmation from trusted party
+		-> routerToP1?field1.field2.field3.field4.field5.field6
+		// validate resolve1 confirmation
+		-> P1ReceiveTrustedResolve1Confirmation(field1, field2, field3, field4, field5, field6)
 	}
 	else
 	{
-		P1StoreSignature{P1RecSignature=field4}
-		->P1SetStateSS{P1State=SENDSIGN}
-		->P1
+		p1StoreReceivedSign{p1RecSign = field4}
+		-> tau{p1State = END}
+		-> P1()
 	};
 	
-P1ReceiveTrustedResolve1Confirmation(field1,field2,field3,field4,field5,field6) =
-	if(field3==ABORTEXISTTYPE)
+P1ReceiveTrustedResolve1Confirmation(field1, field2, field3, field4, field5, field6) =
+	if (field3 == ABORTEXISTTYPE)
 	{
-		P1SetStateE{P1State=END}
-		->P1
+		// TODO: Run assertion here?
+		resolve1Fail{p1State = END}
+		-> P1()
 	}
-	else if(field3==CONFIRMATIONTYPE)
+	else if (field3 == CONFIRMATIONTYPE)
 	{
-		P1SaveConfirmation{P1TrustedConfirmation=field4}
-		->P1GetP1Sign{var P1PlusP2=call(Pow,P1TrustedConfirmation,TRUSTPUBLIC)%TRUSTMOD;P1RecSignature=P1PlusP2-P1Signature}
-		->P1SetStateE{P1State=END}
-		->P1
+		p1StoreResolve1Confirmation{p1TrustedConfirmation = field4}
+		-> p1GetP2Sign{var p1PlusP2 = call(Pow, p1TrustedConfirmation, TRUSTPUBLIC) % TRUSTMOD; p1RecSign = p1PlusP2 - p1Signature}
+		-> tau{p1State = END}
+		-> P1()
 	};
 
 
 //Start of P2
 	
-P2 = 
-[P2State == GENERATE]P2GenerateValues
-[]
-[P2State == RECPROMISE]P2ReceivePromise
-[]
-[P2State == SENDPROMISE]P2SendPromise
-[]
-[P2State == RECSIGN]P2ReceiveSignature
-[]
-[P2State == SENDSIGN]P2SendSign
-[]
-[P2State == END]Skip;
+P2() = 
+	[p2State == GENERATE]P2GenerateValues()
+	[]
+	[p2State == RECPROMISE]P2ReceivePromise()
+	[]
+	[p2State == SENDPROMISE]P2SendPromise()
+	[]
+	[p2State == RECSIGN]P2ReceiveSign()
+	[]
+	[p2State == SENDSIGN]P2SendSign()
+	[]
+	[p2State == END]Skip;
 
-P2GenerateValues =
-	P2GeneratePromise{P2Promise=call(Pow,P2PRIVATE,TRUSTPUBLIC)%TRUSTMOD}
-	->P2GenerateSignature{P2Signature=call(Pow,CONTRACT,P2PRIVATE)%P2MOD}
-	->P2SetStateRP{P2State=RECPROMISE}
-	->P2;
+P2GenerateValues() =
+	p2GeneratePromise{p2Promise = call(Pow,P2PRIVATE,TRUSTPUBLIC) % TRUSTMOD}
+	-> p2GenerateSignature{p2Signature = call(Pow,CONTRACT,P2PRIVATE) % P2MOD}
+	-> tau{p2State = RECPROMISE}
+	-> P2();
 	
-P2ReceivePromise = ROUTERTOP2?field1.field2.field3.field4.field5.field6 -> P2ReceivePromiseAction(field1,field2,field3,field4,field5,field6);
+P2ReceivePromise() = routerToP2?field1.field2.field3.field4.field5.field6 -> P2ReceivePromiseAction(field1, field2, field3, field4, field5, field6);
 
-P2ReceivePromiseAction(field1,field2,field3,field4,field5,field6)=
-	if(field3!=PROMISETYPE||field4!=CONTRACT||field4==EMPTY||field5==EMPTY)
-	//Not Okay Conditions
+P2ReceivePromiseAction(field1, field2, field3, field4, field5, field6) =
+	if(field3 != PROMISETYPE || field4 != CONTRACT || field4 == EMPTY || field5 == EMPTY)
 	{
-		P2SetStateE{P2State=END}
-		->P2
+		p2Terminate{p2State = END}
+		-> P2()
 	}
 	else
 	{
-		P2StorePromise{P2RecPromise=field5}
-		->P2SetStateSP{P2State=SENDPROMISE}
-		->P2
+		p2StoreReceivedPromise{p2RecPromise = field5}
+		-> tau{p2State = SENDPROMISE}
+		-> P2()
 	};
 	
-P2SendPromise = 
-	P2TOROUTER!P2IP.P1IP.PROMISETYPE.CONTRACT.P2Promise.EMPTY
-	->P2SetStateRS{P2State=RECSIGN}
-	->P2
+P2SendPromise() = 
+	p2ToRouter!P2IP.P1IP.PROMISETYPE.CONTRACT.p2Promise.EMPTY
+	-> tau{p2State = RECSIGN}
+	-> P2()
 	[]
-	P2TOROUTER!P2IP.P1IP.PROMISETYPE.EMPTY.EMPTY.EMPTY
-	->P2SetStateE{P2State=END}
-	->P2;
+	p2ToRouter!P2IP.P1IP.PROMISETYPE.EMPTY.EMPTY.EMPTY
+	-> p2Terminate{p2State = END}
+	-> P2();
 
-P2ReceiveSignature = ROUTERTOP2?field1.field2.field3.field4.field5.field6 -> P2ReceiveSignatureAction(field1,field2,field3,field4,field5,field6);
+P2ReceiveSign() = routerToP2?field1.field2.field3.field4.field5.field6 -> P2ReceiveSignAction(field1, field2, field3, field4, field5, field6);
 
-P2ReceiveSignatureAction(field1,field2,field3,field4,field5,field6)=
-	if(field3!=SIGNTYPE||field4==EMPTY||call(Pow,field4,P1PUBLIC)%P1MOD!=CONTRACT)
-	//not okay
-	{
-		//resolve2
-		P2TOROUTER!P2IP.TRUSTEDIP.RESOLVE2TYPE.P2Signature.P2RecPromise.CONTRACT
-		->ROUTERTOP2?field1.field2.field3.field4.field5.field6
-		->P2ReceiveTrustedResolve2Confirmation(field1,field2,field3,field4,field5,field6)
-
+P2ReceiveSignAction(field1, field2, field3, field4, field5, field6) =
+	if(field3 != SIGNTYPE || field4 == EMPTY || call(Pow, field4, P1PUBLIC) % P1MOD != CONTRACT)
+	{	
+		// send resolve2 if invalid sign received
+		p2ToRouter!P2IP.TRUSTEDIP.RESOLVE2TYPE.p2Signature.p2RecPromise.CONTRACT
+		// receive resolve2 confirmation from trusted party
+		-> routerToP2?field1.field2.field3.field4.field5.field6
+		// validate resolve2 confirmation
+		-> P2ReceiveTrustedResolve2Confirmation(field1, field2, field3, field4, field5, field6)
 	}
 	else
 	{
-		P2StoreSignature{P2RecSignature=field4}
-		->P2SetStateSS{P2State=SENDSIGN}
-		->P2
+		p2StoreReceivedSign{p2RecSignature = field4}
+		-> tau{p2State=SENDSIGN}
+		-> P2()
 	};
 	
-P2ReceiveTrustedResolve2Confirmation(field1,field2,field3,field4,field5,field6) =
-	if(field3==ABORTEXISTTYPE)
+P2ReceiveTrustedResolve2Confirmation(field1, field2, field3, field4, field5, field6) =
+	if(field3 == ABORTEXISTTYPE)
 	{
-		P2SetStateE{P2State=END}
-		->P2
+		resolve2Fail{p2State = END}
+		-> P2()
 	}
-	else if(field3==CONFIRMATIONTYPE)
+	else if(field3 == CONFIRMATIONTYPE)
 	{
-		P2SaveConfirmation{P2TrustedConfirmation=field4}
-		->P2GetP1Sign{var P1PlusP2=call(Pow,P2TrustedConfirmation,TRUSTPUBLIC)%TRUSTMOD;P2RecSignature=P1PlusP2-P2Signature}
-		->P2SetStateE{P2State=END}
-		->P2
+		p2StoreResolve2Confirmation{p2TrustedConfirmation = field4}
+		-> p2GetP1Sign{var p1PlusP2 = call(Pow, p2TrustedConfirmation, TRUSTPUBLIC) % TRUSTMOD; p2RecSignature= p1PlusP2 - p2Signature}
+		-> tau{p2State = END}
+		-> P2()
 	};
 
-P2SendSign = 
-	P2TOROUTER!P2IP.P1IP.SIGNTYPE.P2Signature.EMPTY.EMPTY
-	->P2SetStateE{P2State=END}
-	->P2
+P2SendSign() = 
+	p2ToRouter!P2IP.P1IP.SIGNTYPE.p2Signature.EMPTY.EMPTY
+	-> tau{p2State = END}
+	-> P2()
 	[]
-	P2TOROUTER!P2IP.P1IP.SIGNTYPE.EMPTY.EMPTY.EMPTY
-	->P2SetStateE{P2State=END}
-	->P2;
-
-//Start of TrustedParty
+	p2ToRouter!P2IP.P1IP.SIGNTYPE.EMPTY.EMPTY.EMPTY
+	-> p2Terminate{p2State = END}
+	-> P2();
 
 // TrustedParty declarations
-
 #define INIT 1;
 #define ABORTED 2;
 #define RESOLVED1 3;
@@ -292,60 +291,59 @@ var generatedPrivate;
 var generatedSignature;
 var result;
 
-
-TrustedParty =
-	ROUTERTOTRUSTED?field1.field2.field3.field4.field5.field6 -> TrustedPartyAction(field1,field2,field3,field4,field5,field6);
+TrustedParty() =
+	routerToTrusted?field1.field2.field3.field4.field5.field6 -> TrustedPartyAction(field1, field2, field3, field4, field5, field6);
 	
-TrustedPartyAction(field1,field2,field3,field4,field5,field6)=
-	if(field3==ABORTTYPE)
+TrustedPartyAction(field1, field2, field3, field4, field5, field6)=
+	if (field3 == ABORTTYPE)
 	{
-		if (trustedStatus==INIT) 
+		if (trustedStatus == INIT) 
 		{
-			setStatusAbort{trustedStatus=ABORTED}
-			->generateAbortConfirmation{confirmation=call(Pow,field4,TRUSTPRIVATE)%TRUSTMOD}
-			->TRUSTEDTOROUTER!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
-			->TrustedParty
+			setStatusAbort{trustedStatus = ABORTED}
+			-> generateAbortConfirmation{confirmation = call(Pow, field4, TRUSTPRIVATE) % TRUSTMOD}
+			-> trustedToRouter!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
+			-> TrustedParty()
 		}
-		else if (trustedStatus==RESOLVE1TYPE || trustedStatus==RESOLVE2TYPE) 
+		else if (trustedStatus == RESOLVE1TYPE || trustedStatus == RESOLVE2TYPE) 
 		{
-			TRUSTEDTOROUTER!TRUSTEDIP.field1.RESOLVEEXISTTYPE.EMPTY.EMPTY.EMPTY
-			->TrustedParty
+			trustedToRouter!TRUSTEDIP.field1.RESOLVEEXISTTYPE.EMPTY.EMPTY.EMPTY
+			-> TrustedParty()
 		}
 	}
-	else if(field3==RESOLVE2TYPE)
+	else if(field3 == RESOLVE2TYPE)
 	{
-		if (trustedStatus==INIT) 
+		if (trustedStatus == INIT) 
 		{
-			setStatusResolved2{trustedStatus=RESOLVE2TYPE}
-			->generateP1Private{generatedPrivate=call(Pow,field5,TRUSTPRIVATE)%TRUSTMOD}
-			->generateP1Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P1MOD}
-			->concatSignatures{result=generatedSignature+field4}
-			->generateResolved2Confirmation{confirmation=call(Pow,result,TRUSTPRIVATE)%TRUSTMOD}
-			->TRUSTEDTOROUTER!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
-			->TrustedParty
+			setStatusResolved2{trustedStatus = RESOLVE2TYPE}
+			-> generateP1Private{generatedPrivate = call(Pow, field5, TRUSTPRIVATE) % TRUSTMOD}
+			-> generateP1Signature{generatedSignature = call(Pow, CONTRACT, generatedPrivate) % P1MOD}
+			-> concatSignatures{result = generatedSignature + field4}
+			-> generateResolve2Confirmation{confirmation = call(Pow, result, TRUSTPRIVATE) % TRUSTMOD}
+			-> trustedToRouter!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
+			-> TrustedParty()
+		}
+		else if (trustedStatus == ABORTED) 
+		{
+			trustedToRouter!TRUSTEDIP.field1.ABORTEXISTTYPE.EMPTY.EMPTY.EMPTY
+			-> TrustedParty()
+		}
+	}
+	else if(field3 == RESOLVE1TYPE)
+	{
+		if (trustedStatus == INIT) 
+		{
+			setStatusResolved1{trustedStatus = RESOLVE1TYPE}
+			-> generateP2Private{generatedPrivate=call(Pow,field5,TRUSTPRIVATE)%TRUSTMOD}
+			-> generateP2Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P2MOD}
+			-> concatSignatures{result=generatedSignature+field4}
+			-> generateResolved1Confirmation{confirmation=call(Pow,result,TRUSTPRIVATE)%TRUSTMOD}
+			-> trustedToRouter!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
+			-> TrustedParty()
 		}
 		else if (trustedStatus==ABORTED) 
 		{
-			TRUSTEDTOROUTER!TRUSTEDIP.field1.ABORTEXISTTYPE.EMPTY.EMPTY.EMPTY
-			->TrustedParty
-		}
-	}
-	else if(field3==RESOLVE1TYPE)
-	{
-		if (trustedStatus==INIT) 
-		{
-			setStatusResolved1{trustedStatus=RESOLVE1TYPE}
-			->generateP2Private{generatedPrivate=call(Pow,field5,TRUSTPRIVATE)%TRUSTMOD}
-			->generateP2Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P2MOD}
-			->concatSignatures{result=generatedSignature+field4}
-			->generateResolved1Confirmation{confirmation=call(Pow,result,TRUSTPRIVATE)%TRUSTMOD}
-			->TRUSTEDTOROUTER!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
-			->TrustedParty
-		}
-		else if (trustedStatus==ABORTED) 
-		{
-			TRUSTEDTOROUTER!TRUSTEDIP.field1.ABORTEXISTTYPE.EMPTY.EMPTY.EMPTY
-			->TrustedParty
+			trustedToRouter!TRUSTEDIP.field1.ABORTEXISTTYPE.EMPTY.EMPTY.EMPTY
+			-> TrustedParty()
 		}
 	};
 	
@@ -354,135 +352,76 @@ TrustedPartyAction(field1,field2,field3,field4,field5,field6)=
 
 #define GARBAGE -69;
 
-RouterSelector = 
-	Router
+RouterSelector() = 
+	Router()
 	[]
-	CompromisedRouter;
+	Attacker();
 
 //Router intialization
-Router =
-P1TOROUTER?field1.field2.field3.field4.field5.field6->forwardP1(field1,field2,field3,field4,field5,field6)
-[]
-P2TOROUTER?field1.field2.field3.field4.field5.field6->forwardP2(field1,field2,field3,field4,field5,field6)
-[]
-TRUSTEDTOROUTER?field1.field2.field3.field4.field5.field6->forwardTrusted(field1,field2,field3,field4,field5,field6);
+Router() =
+	p1ToRouter?field1.field2.field3.field4.field5.field6 -> Forward(field1, field2, field3, field4, field5, field6)
+	[]
+	p2ToRouter?field1.field2.field3.field4.field5.field6 -> Forward(field1, field2, field3, field4, field5, field6)
+	[]
+	trustedToRouter?field1.field2.field3.field4.field5.field6 -> Forward(field1, field2, field3, field4, field5, field6);
 
 
-forwardP1(field1,field2,field3,field4,field5,field6)=
-	if(field2==P2IP)
+Forward(field1, field2, field3, field4, field5, field6) =
+	if (field2 == P2IP)
 	{
-		ROUTERTOP2!field1.field2.field3.field4.field5.field6
-		->Router
+		routerToP2!field1.field2.field3.field4.field5.field6
+		-> Router()
 	}
-	else if(field2==TRUSTEDIP)
+	else if (field2 == P1IP)
 	{
-		ROUTERTOTRUSTED!field1.field2.field3.field4.field5.field6
-		->Router
-	};
-
-forwardP2(field1,field2,field3,field4,field5,field6)=
-	if(field2==P1IP)
-	{
-		ROUTERTOP1!field1.field2.field3.field4.field5.field6
-		->Router
+		routerToP1!field1.field2.field3.field4.field5.field6
+		-> Router()
 	}
-	else if(field2==TRUSTEDIP)
+	else if (field2 == TRUSTEDIP)
 	{
-		ROUTERTOTRUSTED!field1.field2.field3.field4.field5.field6
-		->Router
+		routerToTrusted!field1.field2.field3.field4.field5.field6
+		-> Router()
+	} else {
+		// TODO: Make the other processes do this too; if unrecognised then just ignore the input
+		Router()
 	};
 	
-forwardTrusted(field1,field2,field3,field4,field5,field6)=
-	if(field2==P1IP)
-	{
-		ROUTERTOP1!field1.field2.field3.field4.field5.field6
-		->Router
-	}
-	else if(field2==P2IP)
-	{
-		ROUTERTOP2!field1.field2.field3.field4.field5.field6
-		->Router
-	};
-	
-//CompromisedRouter initialization
-
-CompromisedRouter =
-P1TOROUTER?field1.field2.field3.field4.field5.field6->CforwardP1(field1,field2,field3,field4,field5,field6)
-[]
-P2TOROUTER?field1.field2.field3.field4.field5.field6->CforwardP2(field1,field2,field3,field4,field5,field6)
-[]
-TRUSTEDTOROUTER?field1.field2.field3.field4.field5.field6->CforwardTrusted(field1,field2,field3,field4,field5,field6);
-
-
-CforwardP1(field1,field2,field3,field4,field5,field6)=
-	if(field2==P2IP)
-	{
-		ROUTERTOP2!field1.field2.field3.field4.field5.field6
-		->CompromisedRouter
-	}
-	else if(field2==TRUSTEDIP)
-	{
-		ROUTERTOTRUSTED!field1.field2.field3.field4.field5.field6
-		->CompromisedRouter
-	}
+Attacker() =
+	p1ToRouter?field1.field2.field3.field4.field5.field6 -> AttackerForward(field1, field2, field3, field4, field5, field6)
 	[]
-	if(field2==P2IP)
+	p2ToRouter?field1.field2.field3.field4.field5.field6 -> AttackerForward(field1, field2, field3, field4, field5, field6)
+	[]
+	trustedToRouter?field1.field2.field3.field4.field5.field6 -> AttackerForward(field1, field2, field3, field4, field5, field6);
+
+
+AttackerForward(field1, field2, field3, field4, field5, field6) =
+	if(field2 == P2IP)
 	{
-		ROUTERTOP2!GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE
-		->CompromisedRouter
+		routerToP2!field1.field2.field3.field4.field5.field6
+		-> Attacker()
+		[]
+		routerToP2!GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE
+		-> Attacker()
+	} 
+	else if (field2 == P1IP)
+	{
+		routerToP1!field1.field2.field3.field4.field5.field6
+		-> Attacker()
+		[]
+		routerToP1!GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE
+		-> Attacker()
 	}
-	else if(field2==TRUSTEDIP)
+	else if(field2 == TRUSTEDIP)
 	{
-		ROUTERTOTRUSTED!GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE
-		->CompromisedRouter
+		routerToTrusted!field1.field2.field3.field4.field5.field6
+		-> Attacker()
+		[]
+		routerToTrusted!GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE
+		-> Attacker()
+	} else {
+		Attacker()
 	};
 
-CforwardP2(field1,field2,field3,field4,field5,field6)=
-	if(field2==P1IP)
-	{
-		ROUTERTOP1!field1.field2.field3.field4.field5.field6
-		->CompromisedRouter
-	}
-	else if(field2==TRUSTEDIP)
-	{
-		ROUTERTOTRUSTED!field1.field2.field3.field4.field5.field6
-		->CompromisedRouter
-	}
-	[]
-	if(field1==P1IP)
-	{
-		ROUTERTOP1!GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE
-		->CompromisedRouter
-	}
-	else if(field1==TRUSTEDIP)
-	{
-		ROUTERTOTRUSTED!GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE
-		->CompromisedRouter
-	};
-	
-CforwardTrusted(field1,field2,field3,field4,field5,field6)=
-	if(field2==P1IP)
-	{
-		ROUTERTOP1!field1.field2.field3.field4.field5.field6
-		->CompromisedRouter
-	}
-	else if(field2==P2IP)
-	{
-		ROUTERTOP2!field1.field2.field3.field4.field5.field6
-		->CompromisedRouter
-	}
-	[]
-if(field2==P1IP)
-	{
-		ROUTERTOP1!GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE
-		->CompromisedRouter
-	}
-	else if(field2==P2IP)
-	{
-		ROUTERTOP2!GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE.GARBAGE
-		->CompromisedRouter
-	};
-
-System = P1|||P2|||TrustedParty|||RouterSelector;
+System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 
 #assert System deadlockfree;
