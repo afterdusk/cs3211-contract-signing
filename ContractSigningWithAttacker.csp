@@ -64,7 +64,7 @@ var p1RecPromise = EMPTY;
 var p1RecSign = EMPTY;
 var p1Promise;
 var p1Sign;
-var p1TrustedConfirmation=EMPTY;
+var p1TrustedConfirmation = EMPTY;
 
 // P2
 var p2State = GENERATE;
@@ -72,7 +72,7 @@ var p2RecPromise = EMPTY;
 var p2RecSign = EMPTY;
 var p2Promise;
 var p2Sign;
-var p2TrustedConfirmation=EMPTY;
+var p2TrustedConfirmation = EMPTY;
 
 // Trusted Party
 var trustedStatus = INIT;
@@ -105,13 +105,13 @@ channel routerToTrusted 10;
 	field 5:	EMPTY		EMPTY		EMPTY		p1RecPromise	p2RecPromise
 	field 6:	CONTRACT	EMPTY		CONTRACT	CONTRACT		CONTRACT
 	
-	Msgtype: 	AbortType		Resolve2Type	Resolve1Type
+	Msgtype: 	AbortConfirmation		ResolveConfirmation
 	field 1: 	Source IP(always)------------------------------------------------   
 	field 2: 	Dest Ip(always)--------------------------------------------------
 	field 3: 	Msg Type(always)-------------------------------------------------
-	field 4: 	Confirmation 	Confirmation 	Confirmation
-	field 5: 	EMPTY			AUTH			AUTH
-	field 6: 	EMPTY			EMPTY   		EMPTY
+	field 4: 	Confirmation 			Confirmation
+	field 5: 	EMPTY					AUTH
+	field 6: 	EMPTY					EMPTY
 */
 
 // P1
