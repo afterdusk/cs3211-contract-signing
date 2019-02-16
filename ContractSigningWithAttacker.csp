@@ -143,7 +143,8 @@ P1SendPromise() =
 	-> p1Terminate{p1State = QUIT}
 	-> P1();
 	
-P1ReceivePromise() = routerToP1?src.dest.msgtype.data1.data2.ct -> P1ReceivePromiseAction(src, dest, msgtype, data1, data2, ct);
+P1ReceivePromise() = routerToP1?src.dest.msgtype.data1.data2.ct 
+	-> P1ReceivePromiseAction(src, dest, msgtype, data1, data2, ct);
 
 P1ReceivePromiseAction(src, dest, msgtype, data1, data2, ct) =
 	if (msgtype != PROMISETYPE || ct != CONTRACT || data1 == EMPTY)
@@ -232,7 +233,8 @@ P2GenerateValues() =
 	-> p2SetStateRP{p2State = RECPROMISE}
 	-> P2();
 	
-P2ReceivePromise() = routerToP2?src.dest.msgtype.data1.data2.ct -> P2ReceivePromiseAction(src, dest, msgtype, data1, data2, ct);
+P2ReceivePromise() = routerToP2?src.dest.msgtype.data1.data2.ct 
+	-> P2ReceivePromiseAction(src, dest, msgtype, data1, data2, ct);
 
 P2ReceivePromiseAction(src, dest, msgtype, data1, data2, ct) =
 	if(msgtype != PROMISETYPE || ct != CONTRACT || data1 == EMPTY)
@@ -296,60 +298,46 @@ P2SendSign() =
 	-> P2();
 
 // Trusted Party
-TrustedParty() =
-	routerToTrusted?src.dest.msgtype.data1.data2.ct -> TrustedPartyAction(src, dest, msgtype, data1, data2, ct);
+TrustedParty() = routerToTrusted?src.dest.msgtype.data1.data2.ct 
+	-> TrustedPartyAction(src, dest, msgtype, data1, data2, ct);
 	
-TrustedPartyAction(src, dest, msgtype, data1, data2, ct)=
-	if (msgtype == ABORTTYPE)
+TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
+	if (trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2) 
 	{
-		if (trustedStatus == INIT) 
-		{
-			setStatusAbort{trustedStatus = ABORTED}
-			-> generateAbortConfirmation{confirmation = call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
-			-> trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.confirmation.EMPTY.EMPTY
-			-> TrustedParty()
-		}
-		else if (trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2) 
-		{
-			trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.EMPTY.EMPTY.EMPTY
-			-> TrustedParty()
-		}
+		trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.EMPTY.EMPTY.EMPTY
+		-> TrustedParty()
+	} 
+	else if (trustedStatus == ABORTED)
+	{
+		trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.EMPTY.EMPTY.EMPTY
+		-> TrustedParty()
+	}
+	else if (msgtype == ABORTTYPE)
+	{
+		setStatusAbort{trustedStatus = ABORTED}
+		-> generateAbortConfirmation{confirmation = call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
+		-> trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.confirmation.EMPTY.EMPTY
+		-> TrustedParty()
 	}
 	else if(msgtype == RESOLVE2TYPE)
 	{
-		if (trustedStatus == INIT) 
-		{
-			setStatusResolved2{trustedStatus = RESOLVED2}
-			-> generateP1Private{generatedPrivate = call(Pow, data2, TRUSTPRIVATE) % TRUSTMOD}
-			-> generateP1Signature{generatedSignature = call(Pow, CONTRACT, generatedPrivate) % P1MOD}
-			-> generateResolve2Confirmation{confirmation = call(Pow, generatedSignature, TRUSTPRIVATE) % TRUSTMOD}
-			-> generateAuth{auth=call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
-			-> trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.EMPTY
-			-> TrustedParty()
-		}
-		else if (trustedStatus == ABORTED) 
-		{
-			trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.EMPTY.EMPTY.EMPTY
-			-> TrustedParty()
-		}
+		setStatusResolved2{trustedStatus = RESOLVED2}
+		-> generateP1Private{generatedPrivate = call(Pow, data2, TRUSTPRIVATE) % TRUSTMOD}
+		-> generateP1Signature{generatedSignature = call(Pow, CONTRACT, generatedPrivate) % P1MOD}
+		-> generateResolve2Confirmation{confirmation = call(Pow, generatedSignature, TRUSTPRIVATE) % TRUSTMOD}
+		-> generateAuth{auth=call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
+		-> trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.EMPTY
+		-> TrustedParty()
 	}
 	else if(msgtype == RESOLVE1TYPE)
 	{
-		if (trustedStatus == INIT) 
-		{
-			setStatusResolved1{trustedStatus = RESOLVED1}
-			-> generateP2Private{generatedPrivate=call(Pow,data2,TRUSTPRIVATE)%TRUSTMOD}
-			-> generateP2Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P2MOD}
-			-> generateResolved1Confirmation{confirmation=call(Pow,generatedSignature,TRUSTPRIVATE)%TRUSTMOD}
-			-> generateAuth{auth=call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
-			-> trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.EMPTY
-			-> TrustedParty()
-		}
-		else if (trustedStatus==ABORTED) 
-		{
-			trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.EMPTY.EMPTY.EMPTY
-			-> TrustedParty()
-		}
+		setStatusResolved1{trustedStatus = RESOLVED1}
+		-> generateP2Private{generatedPrivate=call(Pow,data2,TRUSTPRIVATE)%TRUSTMOD}
+		-> generateP2Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P2MOD}
+		-> generateResolved1Confirmation{confirmation=call(Pow,generatedSignature,TRUSTPRIVATE)%TRUSTMOD}
+		-> generateAuth{auth=call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
+		-> trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.EMPTY
+		-> TrustedParty()
 	};
 	
 
@@ -383,7 +371,6 @@ Forward(src, dest, msgtype, data1, data2, ct) =
 		routerToTrusted!src.dest.msgtype.data1.data2.ct
 		-> Router()
 	} else {
-		// TODO: Make the other processes do this too; if unrecognised then just ignore the input
 		Router()
 	};
 	
