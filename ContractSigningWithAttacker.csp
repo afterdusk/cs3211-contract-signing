@@ -7,6 +7,7 @@
 #define SENDSIGN 3;
 #define RECSIGN 4;
 #define END 5;
+#define QUIT 6;
 
 // Contract ID
 #define CONTRACT 11;
@@ -50,14 +51,14 @@ var p2State = GENERATE;
 var p1RecPromise = EMPTY;
 var p1RecSign = EMPTY;
 var p1Promise;
-var p1Signature;
+var p1Sign;
 var p1TrustedConfirmation=EMPTY;
 
 // P2
 var p2RecPromise = EMPTY;
 var p2RecSign = EMPTY;
 var p2Promise;
-var p2Signature;
+var p2Sign;
 var p2TrustedConfirmation=EMPTY;
 
 // Channel declaration
@@ -97,21 +98,21 @@ P1() =
 	[]
 	[p1State == RECSIGN]P1ReceiveSign()
 	[]
-	[p1State == END]Skip;
+	[p1State == END || p1State == QUIT]Skip;
 
 P1GenerateValues() = 
 	p1GeneratePromise{p1Promise = call(Pow, P1PRIVATE, TRUSTPUBLIC) % TRUSTMOD}
-	-> p1GenerateSignature{p1Signature = call(Pow, CONTRACT, P1PRIVATE) % P1MOD}
-	-> tau{p1State = SENDPROMISE}
+	-> p1GenerateSignature{p1Sign = call(Pow, CONTRACT, P1PRIVATE) % P1MOD}
+	-> p1SetStateSP{p1State = SENDPROMISE}
 	-> P1();
 	
 P1SendPromise() =
 	p1ToRouter!P1IP.P2IP.PROMISETYPE.p1Promise.EMPTY.CONTRACT
-	-> tau{p1State = RECPROMISE}
+	-> p1SetStateRP{p1State = RECPROMISE}
 	-> P1()
 	[]
 	p1ToRouter!P1IP.P2IP.PROMISETYPE.EMPTY.EMPTY.EMPTY
-	-> p1Terminate{p1State = END}
+	-> p1Terminate{p1State = QUIT}
 	-> P1();
 	
 P1ReceivePromise() = routerToP1?src.dest.msgtype.data1.data2.ct -> P1ReceivePromiseAction(src, dest, msgtype, data1, data2, ct);
@@ -128,8 +129,8 @@ P1ReceivePromiseAction(src, dest, msgtype, data1, data2, ct) =
 	}
 	else
 	{
-		p1StoreReceivedPromise{p1RecPromise=data1}
-		-> tau{p1State = SENDSIGN}
+		p1StoreReceivedPromise{p1RecPromise = data1}
+		-> p1SetStateSS{p1State = SENDSIGN}
 		-> P1()
 	};
 	
@@ -144,17 +145,17 @@ P1ReceiveTrustedAbortConfirmation(src, dest, msgtype, data1, data2, ct) =
 	{
 		// TODO: Why save data1?
 		p1StoreAbortConfirmation{p1TrustedConfirmation = data1} 
-		-> tau{p1State = END}
+		-> p1SetStateE{p1State = END}
 		-> P1()
 	};
 	
 P1SendSign() =
-	p1ToRouter!P1IP.P2IP.SIGNTYPE.p1Signature.EMPTY.CONTRACT
-	-> p1SendSign{p1State = RECSIGN}
+	p1ToRouter!P1IP.P2IP.SIGNTYPE.p1Sign.EMPTY.CONTRACT
+	-> p1SetStateRS{p1State = RECSIGN}
 	-> P1()
 	[]
 	p1ToRouter!P1IP.P2IP.SIGNTYPE.EMPTY.EMPTY.EMPTY
-	-> p1Terminate{p1State=END}
+	-> p1Terminate{p1State = QUIT}
 	-> P1();
 
 P1ReceiveSign() = routerToP1?src.dest.msgtype.data1.data2.ct -> P1ReceiveSignAction(src, dest, msgtype, data1, data2, ct);
@@ -163,7 +164,7 @@ P1ReceiveSignAction(src, dest, msgtype, data1, data2, ct)=
 	if (msgtype != SIGNTYPE || ct != CONTRACT || data1 == EMPTY || call(Pow, data1, P2PUBLIC) % P2MOD != CONTRACT)
 	{
 		// send resolve1 if invalid sign received
-		p1ToRouter!P1IP.TRUSTEDIP.RESOLVE1TYPE.p1Signature.p1RecPromise.CONTRACT
+		p1ToRouter!P1IP.TRUSTEDIP.RESOLVE1TYPE.p1Sign.p1RecPromise.CONTRACT
 		// receive resolve1 confirmation from trusted party
 		-> routerToP1?f1.f2.f3.f4.f5.f6
 		// validate resolve1 confirmation
@@ -172,7 +173,7 @@ P1ReceiveSignAction(src, dest, msgtype, data1, data2, ct)=
 	else
 	{
 		p1StoreReceivedSign{p1RecSign = data1}
-		-> tau{p1State = END}
+		-> p1SetStateE{p1State = END}
 		-> P1()
 	};
 	
@@ -186,8 +187,8 @@ P1ReceiveTrustedResolve1Confirmation(src, dest, msgtype, data1, data2, ct) =
 	else if (msgtype == RESOLVECONFIRMATION)
 	{
 		p1StoreResolve1Confirmation{p1TrustedConfirmation = data1}
-		-> p1GetP2Sign{var p1PlusP2 = call(Pow, p1TrustedConfirmation, TRUSTPUBLIC) % TRUSTMOD; p1RecSign = p1PlusP2 - p1Signature}
-		-> tau{p1State = END}
+		-> p1GetP2Sign{p1RecSign = call(Pow, p1TrustedConfirmation, TRUSTPUBLIC) % TRUSTMOD}
+		-> p1SetStateE{p1State = END}
 		-> P1()
 	};
 
@@ -205,12 +206,12 @@ P2() =
 	[]
 	[p2State == SENDSIGN]P2SendSign()
 	[]
-	[p2State == END]Skip;
+	[p2State == END || p2State == QUIT]Skip;
 
 P2GenerateValues() =
 	p2GeneratePromise{p2Promise = call(Pow,P2PRIVATE,TRUSTPUBLIC) % TRUSTMOD}
-	-> p2GenerateSignature{p2Signature = call(Pow,CONTRACT,P2PRIVATE) % P2MOD}
-	-> tau{p2State = RECPROMISE}
+	-> p2GenerateSignature{p2Sign = call(Pow,CONTRACT,P2PRIVATE) % P2MOD}
+	-> p2SetStateRP{p2State = RECPROMISE}
 	-> P2();
 	
 P2ReceivePromise() = routerToP2?src.dest.msgtype.data1.data2.ct -> P2ReceivePromiseAction(src, dest, msgtype, data1, data2, ct);
@@ -218,23 +219,23 @@ P2ReceivePromise() = routerToP2?src.dest.msgtype.data1.data2.ct -> P2ReceiveProm
 P2ReceivePromiseAction(src, dest, msgtype, data1, data2, ct) =
 	if(msgtype != PROMISETYPE || ct != CONTRACT || data1 == EMPTY)
 	{
-		p2Terminate{p2State = END}
+		p2SetStateE{p2State = END}
 		-> P2()
 	}
 	else
 	{
 		p2StoreReceivedPromise{p2RecPromise = data1}
-		-> tau{p2State = SENDPROMISE}
+		-> p2SetStateSP{p2State = SENDPROMISE}
 		-> P2()
 	};
 	
 P2SendPromise() = 
 	p2ToRouter!P2IP.P1IP.PROMISETYPE.p2Promise.EMPTY.CONTRACT
-	-> tau{p2State = RECSIGN}
+	-> p2SetStateRS{p2State = RECSIGN}
 	-> P2()
 	[]
 	p2ToRouter!P2IP.P1IP.PROMISETYPE.EMPTY.EMPTY.EMPTY
-	-> p2Terminate{p2State = END}
+	-> p2Terminate{p2State = QUIT}
 	-> P2();
 
 P2ReceiveSign() = routerToP2?src.dest.msgtype.data1.data2.ct -> P2ReceiveSignAction(src, dest, msgtype, data1, data2, ct);
@@ -243,7 +244,7 @@ P2ReceiveSignAction(src, dest, msgtype, data1, data2, ct) =
 	if(msgtype != SIGNTYPE || ct != CONTRACT || data1 == EMPTY || call(Pow, data1, P1PUBLIC) % P1MOD != CONTRACT)
 	{	
 		// send resolve2 if invalid sign received
-		p2ToRouter!P2IP.TRUSTEDIP.RESOLVE2TYPE.p2Signature.p2RecPromise.CONTRACT
+		p2ToRouter!P2IP.TRUSTEDIP.RESOLVE2TYPE.p2Sign.p2RecPromise.CONTRACT
 		// receive resolve2 confirmation from trusted party
 		-> routerToP2?f1.f2.f3.f4.f5.f6
 		// validate resolve2 confirmation
@@ -252,7 +253,7 @@ P2ReceiveSignAction(src, dest, msgtype, data1, data2, ct) =
 	else
 	{
 		p2StoreReceivedSign{p2RecSign = data1}
-		-> tau{p2State=SENDSIGN}
+		-> p2SetStateSS{p2State=SENDSIGN}
 		-> P2()
 	};
 	
@@ -265,18 +266,18 @@ P2ReceiveTrustedResolve2Confirmation(src, dest, msgtype, data1, data2, ct) =
 	else if(msgtype == RESOLVECONFIRMATION)
 	{
 		p2StoreResolve2Confirmation{p2TrustedConfirmation = data1}
-		-> p2GetP1Sign{var p1PlusP2 = call(Pow, p2TrustedConfirmation, TRUSTPUBLIC) % TRUSTMOD; p2RecSign = p1PlusP2 - p2Signature}
-		-> tau{p2State = END}
+		-> p2GetP1Sign{p2RecSign = call(Pow, p2TrustedConfirmation, TRUSTPUBLIC) % TRUSTMOD}
+		-> p2SetStateE{p2State = END}
 		-> P2()
 	};
 
 P2SendSign() = 
-	p2ToRouter!P2IP.P1IP.SIGNTYPE.p2Signature.EMPTY.CONTRACT
+	p2ToRouter!P2IP.P1IP.SIGNTYPE.p2Sign.EMPTY.CONTRACT
 	-> p2SendSign{p2State = END}
 	-> P2()
 	[]
 	p2ToRouter!P2IP.P1IP.SIGNTYPE.EMPTY.EMPTY.EMPTY
-	-> p2Terminate{p2State = END}
+	-> p2Terminate{p2State = QUIT}
 	-> P2();
 
 // TrustedParty declarations
@@ -289,7 +290,7 @@ var trustedStatus = INIT;
 var confirmation;
 var generatedPrivate;
 var generatedSignature;
-var result;
+var auth;
 
 TrustedParty() =
 	routerToTrusted?src.dest.msgtype.data1.data2.ct -> TrustedPartyAction(src, dest, msgtype, data1, data2, ct);
@@ -304,7 +305,7 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct)=
 			-> trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.confirmation.EMPTY.EMPTY
 			-> TrustedParty()
 		}
-		else if (trustedStatus == RESOLVE1TYPE || trustedStatus == RESOLVE2TYPE) 
+		else if (trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2) 
 		{
 			trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.EMPTY.EMPTY.EMPTY
 			-> TrustedParty()
@@ -314,12 +315,12 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct)=
 	{
 		if (trustedStatus == INIT) 
 		{
-			setStatusResolved2{trustedStatus = RESOLVE2TYPE}
+			setStatusResolved2{trustedStatus = RESOLVED2}
 			-> generateP1Private{generatedPrivate = call(Pow, data2, TRUSTPRIVATE) % TRUSTMOD}
 			-> generateP1Signature{generatedSignature = call(Pow, CONTRACT, generatedPrivate) % P1MOD}
-			-> concatSignatures{result = generatedSignature + data1}
-			-> generateResolve2Confirmation{confirmation = call(Pow, result, TRUSTPRIVATE) % TRUSTMOD}
-			-> trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.EMPTY.EMPTY
+			-> generateResolve2Confirmation{confirmation = call(Pow, generatedSignature, TRUSTPRIVATE) % TRUSTMOD}
+			-> generateAuth{auth=call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
+			-> trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.EMPTY
 			-> TrustedParty()
 		}
 		else if (trustedStatus == ABORTED) 
@@ -332,12 +333,12 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct)=
 	{
 		if (trustedStatus == INIT) 
 		{
-			setStatusResolved1{trustedStatus = RESOLVE1TYPE}
+			setStatusResolved1{trustedStatus = RESOLVED1}
 			-> generateP2Private{generatedPrivate=call(Pow,data2,TRUSTPRIVATE)%TRUSTMOD}
 			-> generateP2Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P2MOD}
-			-> concatSignatures{result=generatedSignature+data1}
-			-> generateResolved1Confirmation{confirmation=call(Pow,result,TRUSTPRIVATE)%TRUSTMOD}
-			-> trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.EMPTY.EMPTY
+			-> generateResolved1Confirmation{confirmation=call(Pow,generatedSignature,TRUSTPRIVATE)%TRUSTMOD}
+			-> generateAuth{auth=call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
+			-> trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.EMPTY
 			-> TrustedParty()
 		}
 		else if (trustedStatus==ABORTED) 
@@ -351,11 +352,14 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct)=
 //Start of RouterSelector
 
 #define GARBAGE -69;
+#define SECURE -1;
+#define ATTACKER -2;
+var routerState = EMPTY;
 
 RouterSelector() = 
-	secureRouter{var dummy;} -> Router()
+	secureRouter{routerState=SECURE} -> Router()
 	[]
-	attacker{var dummy;} -> Attacker();
+	attacker{routerState=ATTACKER} -> Attacker();
 
 //Router intialization
 Router() =
@@ -424,20 +428,48 @@ AttackerForward(src, dest, msgtype, data1, data2, ct) =
 
 System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 
-// Both processes eventually end
-#define processesEnd p1State == END && p2State == END;
-#assert System() reaches processesEnd;
+#define noattacker (routerState == SECURE);
 
-// P1 only sends signature when it receives valid P2 promise
-#define validPromise p1RecPromise == p2Promise;
-#assert System() |= [](p1SendSign -> validPromise);
+// Both processes eventually end or quit
+#define processesend (p1State == END || p1State == QUIT) && (p2State == QUIT || p2State == END);
+#assert System reaches processesend;
 
-// If p1 sends signature, both parties will get signature
-#define receiveSignature p1RecSign == p2Signature && p2RecSign == p1Signature;
-#assert System() |= [](p1SendSign && secureRouter -> <>receiveSignature);
+// If P1 sends signature, both parties will eventually get signature
+#define bothreceivesign (p1RecSign == p2Sign && p2RecSign == p1Sign);
+#define p1sendsign (p1State == RECSIGN);
+#assert System |= [](p1sendsign && noattacker -> <>bothreceivesign);
 
 // If trusted party has once aborted, neither party will receive signature
-#define trustedAborted trustedStatus == ABORTED;
-#assert System() |= [](trustedAborted -> []!receiveSignature);
+#define trustedstatusaborted (trustedStatus == ABORTED);
+#assert System |= [](trustedstatusaborted -> []!bothreceivesign);
+
+// If P1 receives P2's promise and doesn't quit, it will get P2's signature
+#define p1receivep2promise (p1RecPromise == p2Promise && p1State != QUIT);
+#define p1receivep2sign (p1RecSign == p2Sign);
+#assert System |= []([]p1receivep2promise && noattacker -> <>p1receivep2sign);
+
+// If P2 receives P1's promise and doesn't quit, it will get P1's signature
+#define p2receivep1promise (p2State != QUIT && p2RecPromise == p1Promise);
+#define p2receivep1sign (p2RecSign == p1Sign);
+#assert System |= []([]p2receivep1promise && noattacker -> <>p2receivep1sign);
+
+// P1 only sends signature when it receives valid P2 promise
+#define p1receivesbadpromise (p1RecPromise != p2Promise && p1State != QUIT);
+#assert System |= []([]p1receivesbadpromise && noattacker -> !p1sendsign);
+
+#define trustedstatusresolve (trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2);
+#define trustedstatusabort (trustedStatus == ABORTED);
+#define abortconfirmation (p1TrustedConfirmation == call(Pow, p1Promise, TRUSTPRIVATE) % TRUSTMOD);
+//#define resolve1confirmation (p1TrustedConfirmation == call(Pow, p2Sign, TRUSTPRIVATE) % TRUSTMOD);
+//#define resolve2confirmation (p2TrustedConfirmation == call(Pow, p1Sign, TRUSTPRIVATE) % TRUSTMOD);
+
+// After trusted party has resolved, he will not entertain aborts
+#assert System |= [](trustedstatusresolve -> []!abortconfirmation);
+
+// After trusted party has aborted, 
+#assert System |= [](trustedstatusabort && noattacker -> <>abortconfirmation);
+//#assert System |= [](trustedstatusabort && noattacker -> <>(resolve1confirmation || resolve2confirmation));
+
+
 
 #assert System() deadlockfree;
