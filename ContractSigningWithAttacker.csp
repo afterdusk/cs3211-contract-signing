@@ -34,9 +34,9 @@
 #define ABORTTYPE -4;
 #define RESOLVE1TYPE -5;
 #define RESOLVE2TYPE -6;
-#define CONFIRMATIONTYPE -7;
-#define ABORTEXISTTYPE -8;
-#define RESOLVEEXISTTYPE -9;
+#define ABORTCONFIRMATION -7;
+#define RESOLVECONFIRMATION -8;
+
 	//Encoded Identities
 #define P1IP 1;
 #define P2IP 2;
@@ -55,7 +55,7 @@ var p1TrustedConfirmation=EMPTY;
 
 // P2
 var p2RecPromise = EMPTY;
-var p2RecSignature = EMPTY;
+var p2RecSign = EMPTY;
 var p2Promise;
 var p2Signature;
 var p2TrustedConfirmation=EMPTY;
@@ -134,13 +134,13 @@ P1ReceivePromiseAction(field1, field2, field3, field4, field5, field6) =
 	};
 	
 P1ReceiveTrustedAbortConfirmation(field1, field2, field3, field4, field5, field6) =
-	if (field3 == RESOLVEEXISTTYPE)
+	if (field3 == RESOLVECONFIRMATION)
 	{
 		// TODO: Run assertion to check for P2SIGN
 		p1AbortFail{p1State = END}
 		-> P1()
 	}
-	else if (field3 == CONFIRMATIONTYPE)
+	else if (field3 == ABORTCONFIRMATION)
 	{
 		// TODO: Why save field4?
 		p1StoreAbortConfirmation{p1TrustedConfirmation = field4} 
@@ -150,7 +150,7 @@ P1ReceiveTrustedAbortConfirmation(field1, field2, field3, field4, field5, field6
 	
 P1SendSign() =
 	p1ToRouter!P1IP.P2IP.SIGNTYPE.p1Signature.EMPTY.EMPTY
-	-> tau{p1State = RECSIGN}
+	-> p1SendSign{p1State = RECSIGN}
 	-> P1()
 	[]
 	p1ToRouter!P1IP.P2IP.SIGNTYPE.EMPTY.EMPTY.EMPTY
@@ -177,13 +177,13 @@ P1ReceiveSignAction(field1, field2, field3, field4, field5, field6)=
 	};
 	
 P1ReceiveTrustedResolve1Confirmation(field1, field2, field3, field4, field5, field6) =
-	if (field3 == ABORTEXISTTYPE)
+	if (field3 == ABORTCONFIRMATION)
 	{
 		// TODO: Run assertion here?
 		resolve1Fail{p1State = END}
 		-> P1()
 	}
-	else if (field3 == CONFIRMATIONTYPE)
+	else if (field3 == RESOLVECONFIRMATION)
 	{
 		p1StoreResolve1Confirmation{p1TrustedConfirmation = field4}
 		-> p1GetP2Sign{var p1PlusP2 = call(Pow, p1TrustedConfirmation, TRUSTPUBLIC) % TRUSTMOD; p1RecSign = p1PlusP2 - p1Signature}
@@ -251,28 +251,28 @@ P2ReceiveSignAction(field1, field2, field3, field4, field5, field6) =
 	}
 	else
 	{
-		p2StoreReceivedSign{p2RecSignature = field4}
+		p2StoreReceivedSign{p2RecSign = field4}
 		-> tau{p2State=SENDSIGN}
 		-> P2()
 	};
 	
 P2ReceiveTrustedResolve2Confirmation(field1, field2, field3, field4, field5, field6) =
-	if(field3 == ABORTEXISTTYPE)
+	if(field3 == ABORTCONFIRMATION)
 	{
 		resolve2Fail{p2State = END}
 		-> P2()
 	}
-	else if(field3 == CONFIRMATIONTYPE)
+	else if(field3 == RESOLVECONFIRMATION)
 	{
 		p2StoreResolve2Confirmation{p2TrustedConfirmation = field4}
-		-> p2GetP1Sign{var p1PlusP2 = call(Pow, p2TrustedConfirmation, TRUSTPUBLIC) % TRUSTMOD; p2RecSignature= p1PlusP2 - p2Signature}
+		-> p2GetP1Sign{var p1PlusP2 = call(Pow, p2TrustedConfirmation, TRUSTPUBLIC) % TRUSTMOD; p2RecSign = p1PlusP2 - p2Signature}
 		-> tau{p2State = END}
 		-> P2()
 	};
 
 P2SendSign() = 
 	p2ToRouter!P2IP.P1IP.SIGNTYPE.p2Signature.EMPTY.EMPTY
-	-> tau{p2State = END}
+	-> p2SendSign{p2State = END}
 	-> P2()
 	[]
 	p2ToRouter!P2IP.P1IP.SIGNTYPE.EMPTY.EMPTY.EMPTY
@@ -301,12 +301,12 @@ TrustedPartyAction(field1, field2, field3, field4, field5, field6)=
 		{
 			setStatusAbort{trustedStatus = ABORTED}
 			-> generateAbortConfirmation{confirmation = call(Pow, field4, TRUSTPRIVATE) % TRUSTMOD}
-			-> trustedToRouter!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
+			-> trustedToRouter!TRUSTEDIP.field1.ABORTCONFIRMATION.confirmation.EMPTY.EMPTY
 			-> TrustedParty()
 		}
 		else if (trustedStatus == RESOLVE1TYPE || trustedStatus == RESOLVE2TYPE) 
 		{
-			trustedToRouter!TRUSTEDIP.field1.RESOLVEEXISTTYPE.EMPTY.EMPTY.EMPTY
+			trustedToRouter!TRUSTEDIP.field1.RESOLVECONFIRMATION.EMPTY.EMPTY.EMPTY
 			-> TrustedParty()
 		}
 	}
@@ -319,12 +319,12 @@ TrustedPartyAction(field1, field2, field3, field4, field5, field6)=
 			-> generateP1Signature{generatedSignature = call(Pow, CONTRACT, generatedPrivate) % P1MOD}
 			-> concatSignatures{result = generatedSignature + field4}
 			-> generateResolve2Confirmation{confirmation = call(Pow, result, TRUSTPRIVATE) % TRUSTMOD}
-			-> trustedToRouter!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
+			-> trustedToRouter!TRUSTEDIP.field1.RESOLVECONFIRMATION.confirmation.EMPTY.EMPTY
 			-> TrustedParty()
 		}
 		else if (trustedStatus == ABORTED) 
 		{
-			trustedToRouter!TRUSTEDIP.field1.ABORTEXISTTYPE.EMPTY.EMPTY.EMPTY
+			trustedToRouter!TRUSTEDIP.field1.ABORTCONFIRMATION.EMPTY.EMPTY.EMPTY
 			-> TrustedParty()
 		}
 	}
@@ -337,12 +337,12 @@ TrustedPartyAction(field1, field2, field3, field4, field5, field6)=
 			-> generateP2Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P2MOD}
 			-> concatSignatures{result=generatedSignature+field4}
 			-> generateResolved1Confirmation{confirmation=call(Pow,result,TRUSTPRIVATE)%TRUSTMOD}
-			-> trustedToRouter!TRUSTEDIP.field1.CONFIRMATIONTYPE.confirmation.EMPTY.EMPTY
+			-> trustedToRouter!TRUSTEDIP.field1.RESOLVECONFIRMATION.confirmation.EMPTY.EMPTY
 			-> TrustedParty()
 		}
 		else if (trustedStatus==ABORTED) 
 		{
-			trustedToRouter!TRUSTEDIP.field1.ABORTEXISTTYPE.EMPTY.EMPTY.EMPTY
+			trustedToRouter!TRUSTEDIP.field1.ABORTCONFIRMATION.EMPTY.EMPTY.EMPTY
 			-> TrustedParty()
 		}
 	};
@@ -424,4 +424,20 @@ AttackerForward(field1, field2, field3, field4, field5, field6) =
 
 System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 
-#assert System deadlockfree;
+// Both processes eventually end
+#define processesEnd p1State == END && p2State == END;
+#assert System() reaches processesEnd;
+
+// P1 only sends signature when it receives valid P2 promise
+#define validPromise p1RecPromise == p2Promise;
+#assert System() |= [](p1SendSign -> validPromise);
+
+// If p1 sends signature, both parties will get signature
+#define receiveSignature p1RecSign == p2Signature && p2RecSign == p1Signature;
+#assert System() |= [](p1SendSign && secureRouter -> <>receiveSignature);
+
+// If trusted party has once aborted, neither party will receive signature
+#define trustedAborted trustedStatus == ABORTED;
+#assert System() |= [](trustedAborted -> []!receiveSignature);
+
+#assert System() deadlockfree;
