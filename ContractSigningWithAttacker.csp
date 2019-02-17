@@ -442,22 +442,19 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #define p1receivesbadpromise (p1RecPromise != p2Promise && p1State != QUIT);
 #assert System |= []([]p1receivesbadpromise && noattacker -> !p1sendsign);
 
+// 7. After trusted party has resolved, he will not entertain aborts
 #define trustedstatusresolve (trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2);
 #define trustedstatusabort (trustedStatus == ABORTED);
 #define abortconfirmation (p1TrustedConfirmation == call(Pow, p1Promise, TRUSTPRIVATE) % TRUSTMOD);
-
-// 7. After trusted party has resolved, he will not entertain aborts
 #assert System |= [](trustedstatusresolve -> []!abortconfirmation);
 
 // 8. After trusted party has aborted, 
 #assert System |= [](trustedstatusabort && noattacker -> <>abortconfirmation);
 
 /** Attacker Assertions **/
-// 9. If P1 sends signature, both parties will eventually get signature
-//#assert System |= [](p1sendsign && withattacker -> <>bothreceivesign);
+// 9. With attacker, assertion 2. no longer holds
+#assert System |= [](p1sendsign && withattacker -> <>bothreceivesign);
 
-// 10. If trusted party has once aborted, neither party will receive signature
-//#assert System |= [](trustedstatusaborted && withattacker-> []!bothreceivesign);
-
-// 11. If P1 receives P2's promise and doesn't quit, it will get P2's signature
-//#assert System |= []([]p1receivep2promise && withattacker -> <>p1receivep2sign);
+// 10. 11. With attacker, assertion 4. and 5. no longer hold
+#assert System |= []([]p1receivep2promise && withattacker -> <>p1receivep2sign);
+#assert System |= []([]p2receivep1promise && withattacker -> <>p2receivep1sign);
