@@ -343,9 +343,9 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
 
 // Router and Attacker
 RouterSelector() = 
-	secureRouter{routerState=SECURE} -> Router()
+	secureRouter{routerState = SECURE} -> Router()
 	[]
-	attacker{routerState=ATTACKER} -> Attacker();
+	attacker{routerState = ATTACKER} -> Attacker();
 
 Router() =
 	p1ToRouter?src.dest.msgtype.data1.data2.ct -> Forward(src, dest, msgtype, data1, data2, ct)
@@ -419,9 +419,6 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #define processesend (p1State == END || p1State == QUIT) && (p2State == QUIT || p2State == END);
 #assert System reaches processesend;
 
-//#define terminate (p1State == QUIT || p2State == QUIT);
-//#assert System |= []((noattacker && []noterminate) -> bothreceivesign && processesend);
-
 // 2. If P1 sends signature, both parties will eventually get signature
 #define bothreceivesign (p1RecSign == p2Sign && p2RecSign == p1Sign);
 #define p1sendsign (p1State == RECSIGN);
@@ -448,8 +445,6 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #define trustedstatusresolve (trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2);
 #define trustedstatusabort (trustedStatus == ABORTED);
 #define abortconfirmation (p1TrustedConfirmation == call(Pow, p1Promise, TRUSTPRIVATE) % TRUSTMOD);
-//#define resolve1confirmation (p1TrustedConfirmation == call(Pow, p2Sign, TRUSTPRIVATE) % TRUSTMOD);
-//#define resolve2confirmation (p2TrustedConfirmation == call(Pow, p1Sign, TRUSTPRIVATE) % TRUSTMOD);
 
 // 7. After trusted party has resolved, he will not entertain aborts
 #assert System |= [](trustedstatusresolve -> []!abortconfirmation);
