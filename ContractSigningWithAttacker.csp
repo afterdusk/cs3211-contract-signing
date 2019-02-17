@@ -102,16 +102,16 @@ channel routerToTrusted 10;
 	field 2:	Dest Ip(always)--------------------------------------------------	
 	field 3:	Msg Type(always)-------------------------------------------------
 	field 4:	Promise		Signature	P1Promise	P1Sign			P2Sign
-	field 5:	EMPTY		EMPTY		EMPTY		p1RecPromise	p2RecPromise
-	field 6:	CONTRACT	EMPTY		CONTRACT	CONTRACT		CONTRACT
+	field 5:	EMPTY		EMPTY		EMPTY		P2Promise		P1Promise
+	field 6:	CONTRACT(always)-------------------------------------------------
 	
 	Msgtype: 	AbortConfirmation		ResolveConfirmation
 	field 1: 	Source IP(always)------------------------------------------------   
 	field 2: 	Dest Ip(always)--------------------------------------------------
 	field 3: 	Msg Type(always)-------------------------------------------------
 	field 4: 	Confirmation 			Confirmation
-	field 5: 	EMPTY					AUTH
-	field 6: 	EMPTY					EMPTY
+	field 5: 	EMPTY					Auth
+	field 6: 	CONTRACT(always)-------------------------------------------------
 */
 
 // P1
@@ -304,19 +304,19 @@ TrustedParty() = routerToTrusted?src.dest.msgtype.data1.data2.ct
 TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
 	if (trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2) 
 	{
-		trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.EMPTY.EMPTY.EMPTY
+		trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.EMPTY.EMPTY.CONTRACT
 		-> TrustedParty()
 	} 
 	else if (trustedStatus == ABORTED)
 	{
-		trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.EMPTY.EMPTY.EMPTY
+		trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.EMPTY.EMPTY.CONTRACT
 		-> TrustedParty()
 	}
 	else if (msgtype == ABORTTYPE)
 	{
 		setStatusAbort{trustedStatus = ABORTED}
 		-> generateAbortConfirmation{confirmation = call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
-		-> trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.confirmation.EMPTY.EMPTY
+		-> trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.confirmation.EMPTY.CONTRACT
 		-> TrustedParty()
 	}
 	else if(msgtype == RESOLVE2TYPE)
@@ -326,7 +326,7 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
 		-> generateP1Signature{generatedSignature = call(Pow, CONTRACT, generatedPrivate) % P1MOD}
 		-> generateResolve2Confirmation{confirmation = call(Pow, generatedSignature, TRUSTPRIVATE) % TRUSTMOD}
 		-> generateAuth{auth=call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
-		-> trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.EMPTY
+		-> trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.CONTRACT
 		-> TrustedParty()
 	}
 	else if(msgtype == RESOLVE1TYPE)
@@ -336,7 +336,7 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
 		-> generateP2Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P2MOD}
 		-> generateResolved1Confirmation{confirmation=call(Pow,generatedSignature,TRUSTPRIVATE)%TRUSTMOD}
 		-> generateAuth{auth=call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
-		-> trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.EMPTY
+		-> trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.CONTRACT
 		-> TrustedParty()
 	};
 	
@@ -413,34 +413,35 @@ AttackerForward(src, dest, msgtype, data1, data2, ct) =
 System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 
 #define noattacker (routerState == SECURE);
+#define withattacker (routerState == ATTACKER);
 
-// Both processes eventually end or quit
+// 1. Both processes eventually end or quit
 #define processesend (p1State == END || p1State == QUIT) && (p2State == QUIT || p2State == END);
 #assert System reaches processesend;
 
 //#define terminate (p1State == QUIT || p2State == QUIT);
 //#assert System |= []((noattacker && []noterminate) -> bothreceivesign && processesend);
 
-// If P1 sends signature, both parties will eventually get signature
+// 2. If P1 sends signature, both parties will eventually get signature
 #define bothreceivesign (p1RecSign == p2Sign && p2RecSign == p1Sign);
 #define p1sendsign (p1State == RECSIGN);
 #assert System |= [](p1sendsign && noattacker -> <>bothreceivesign);
 
-// If trusted party has once aborted, neither party will receive signature
+// 3. If trusted party has once aborted, neither party will receive signature
 #define trustedstatusaborted (trustedStatus == ABORTED);
 #assert System |= [](trustedstatusaborted -> []!bothreceivesign);
 
-// If P1 receives P2's promise and doesn't quit, it will get P2's signature
+// 4. If P1 receives P2's promise and doesn't quit, it will get P2's signature
 #define p1receivep2promise (p1RecPromise == p2Promise && p1State != QUIT);
 #define p1receivep2sign (p1RecSign == p2Sign);
 #assert System |= []([]p1receivep2promise && noattacker -> <>p1receivep2sign);
 
-// If P2 receives P1's promise and doesn't quit, it will get P1's signature
+// 5. If P2 receives P1's promise and doesn't quit, it will get P1's signature
 #define p2receivep1promise (p2State != QUIT && p2RecPromise == p1Promise);
 #define p2receivep1sign (p2RecSign == p1Sign);
 #assert System |= []([]p2receivep1promise && noattacker -> <>p2receivep1sign);
 
-// P1 only sends signature when it receives valid P2 promise
+// 6. P1 only sends signature when it receives valid P2 promise
 #define p1receivesbadpromise (p1RecPromise != p2Promise && p1State != QUIT);
 #assert System |= []([]p1receivesbadpromise && noattacker -> !p1sendsign);
 
@@ -450,8 +451,18 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 //#define resolve1confirmation (p1TrustedConfirmation == call(Pow, p2Sign, TRUSTPRIVATE) % TRUSTMOD);
 //#define resolve2confirmation (p2TrustedConfirmation == call(Pow, p1Sign, TRUSTPRIVATE) % TRUSTMOD);
 
-// After trusted party has resolved, he will not entertain aborts
+// 7. After trusted party has resolved, he will not entertain aborts
 #assert System |= [](trustedstatusresolve -> []!abortconfirmation);
 
-// After trusted party has aborted, 
+// 8. After trusted party has aborted, 
 #assert System |= [](trustedstatusabort && noattacker -> <>abortconfirmation);
+
+/** Attacker Assertions **/
+// 9. If P1 sends signature, both parties will eventually get signature
+//#assert System |= [](p1sendsign && withattacker -> <>bothreceivesign);
+
+// 10. If trusted party has once aborted, neither party will receive signature
+//#assert System |= [](trustedstatusaborted && withattacker-> []!bothreceivesign);
+
+// 11. If P1 receives P2's promise and doesn't quit, it will get P2's signature
+//#assert System |= []([]p1receivep2promise && withattacker -> <>p1receivep2sign);
