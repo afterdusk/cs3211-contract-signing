@@ -1,7 +1,7 @@
 ﻿#import "PAT.Math";
 
 
-/** Constants **/
+/***** Constants *****/
 // Contract ID
 #define CONTRACT 11;
 
@@ -57,7 +57,7 @@
 #define ABORTCONFIRMATION -7;
 #define RESOLVECONFIRMATION -8;
 
-/** Global Variables **/
+/***** Global Variables *****/
 // P1
 var p1State = GENERATE;
 var p1RecPromise = EMPTY;
@@ -85,7 +85,7 @@ var auth;
 var routerState = EMPTY;
 
 
-/** Channels **/
+/***** Channels *****/
 channel p1ToRouter 10;
 channel p2ToRouter 10;
 channel trustedToRouter 10;
@@ -95,7 +95,7 @@ channel routerToP2 10;
 channel routerToTrusted 10;
 
 
-/** Message encoding style **/
+/***** Message encoding style *****/
 /*
 	Msgtype:	Promise		Sign		Abort		Resolve1		Resolve2
 	field 1:	Source IP(always)------------------------------------------------ 		
@@ -270,7 +270,7 @@ P2ReceiveSignAction(src, dest, msgtype, data1, data2, ct) =
 	else
 	{
 		p2StoreReceivedSign{p2RecSign = data1}
-		-> p2SetStateSS{p2State=SENDSIGN}
+		-> p2SetStateSS{p2State = SENDSIGN}
 		-> P2()
 	};
 	
@@ -415,46 +415,55 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #define noattacker (routerState == SECURE);
 #define withattacker (routerState == ATTACKER);
 
-// 1. Both processes eventually end or quit
+/***** Implementation Checking *****/
+// 1. P2 only sends promise when it receives valid P1 promise
+#define p2receivesbadpromise (p2RecPromise != p1Promise && p2State != QUIT);
+#define p2sendpromise (p2State == RECSIGN);
+#assert System |= []([]p2receivesbadpromise && noattacker -> !p2sendpromise);
+
+// 2. P1 only sends signature when it receives valid P2 Promise
+#define p1receivesbadpromise (p1RecPromise != p2Promise && p1State != QUIT);
+#define p1sendsign (p1State == RECSIGN);
+#assert System |= []([]p1receivesbadpromise && noattacker -> !p1sendsign);
+
+/***** Protocol Verification *****/
+// 3. Both processes eventually end or quit
 #define processesend (p1State == END || p1State == QUIT) && (p2State == QUIT || p2State == END);
 #assert System reaches processesend;
 
-// 2. If P1 sends signature, both parties will eventually get signature
+// 4. If P1 sends signature, both parties will eventually get signature
 #define bothreceivesign (p1RecSign == p2Sign && p2RecSign == p1Sign);
-#define p1sendsign (p1State == RECSIGN);
 #assert System |= [](p1sendsign && noattacker -> <>bothreceivesign);
 
-// 3. If trusted party has once aborted, neither party will receive signature
-#define trustedstatusaborted (trustedStatus == ABORTED);
-#assert System |= [](trustedstatusaborted -> []!bothreceivesign);
-
-// 4. If P1 receives P2's promise and doesn't quit, it will get P2's signature
+// 5. If P1 receives P2's promise and doesn't quit, it will get P2's signature
+// 	  Covers both success scenario and resolve1
 #define p1receivep2promise (p1RecPromise == p2Promise && p1State != QUIT);
 #define p1receivep2sign (p1RecSign == p2Sign);
 #assert System |= []([]p1receivep2promise && noattacker -> <>p1receivep2sign);
 
-// 5. If P2 receives P1's promise and doesn't quit, it will get P1's signature
+// 6. If P2 receives P1's promise and doesn't quit, it will get P1's signature
+//    Covers both success scenario and resolve2
 #define p2receivep1promise (p2State != QUIT && p2RecPromise == p1Promise);
 #define p2receivep1sign (p2RecSign == p1Sign);
 #assert System |= []([]p2receivep1promise && noattacker -> <>p2receivep1sign);
 
-// 6. P1 only sends signature when it receives valid P2 promise
-#define p1receivesbadpromise (p1RecPromise != p2Promise && p1State != QUIT);
-#assert System |= []([]p1receivesbadpromise && noattacker -> !p1sendsign);
+// 7. If trusted party has once aborted, neither party will receive signature
+#define trustedstatusaborted (trustedStatus == ABORTED);
+#assert System |= [](trustedstatusaborted -> []!bothreceivesign);
 
-// 7. After trusted party has resolved, he will not entertain aborts
+// 8. If trusted party has once resolved, he will not entertain aborts
 #define trustedstatusresolve (trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2);
 #define trustedstatusabort (trustedStatus == ABORTED);
 #define abortconfirmation (p1TrustedConfirmation == call(Pow, p1Promise, TRUSTPRIVATE) % TRUSTMOD);
 #assert System |= [](trustedstatusresolve -> []!abortconfirmation);
 
-// 8. After trusted party has aborted, 
+// 9. After trusted party has aborted, 
 #assert System |= [](trustedstatusabort && noattacker -> <>abortconfirmation);
 
-/** Attacker Assertions **/
-// 9. With attacker, assertion 2. no longer holds
+/***** Protocol Verification with Attacker *****/
+// 10. With attacker, assertion 4. no longer holds
 #assert System |= [](p1sendsign && withattacker -> <>bothreceivesign);
 
-// 10. 11. With attacker, assertion 4. and 5. no longer hold
+// 11. 12. With attacker, assertion 5. and 6. no longer hold
 #assert System |= []([]p1receivep2promise && withattacker -> <>p1receivep2sign);
 #assert System |= []([]p2receivep1promise && withattacker -> <>p2receivep1sign);
