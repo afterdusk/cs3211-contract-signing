@@ -201,7 +201,7 @@ P1ReceiveSignAction(src, dest, msgtype, data1, data2, ct)=
 	};
 	
 P1ReceiveTrustedResolve1Confirmation(src, dest, msgtype, data1, data2, ct) =
-	if (msgtype == ABORTCONFIRMATION)
+	if (msgtype == ABORTCONFIRMATION||call(Pow,data2,TRUSTPUBLIC)% TRUSTMOD != p1Sign)
 	{
 		resolve1Fail{p1State = END}
 		-> P1()
@@ -278,7 +278,7 @@ P2ReceiveSignAction(src, dest, msgtype, data1, data2, ct) =
 	};
 	
 P2ReceiveTrustedResolve2Confirmation(src, dest, msgtype, data1, data2, ct) =
-	if(msgtype == ABORTCONFIRMATION)
+	if(msgtype == ABORTCONFIRMATION||call(Pow,data2,TRUSTPUBLIC)% TRUSTMOD != p2Sign)
 	{
 		resolve2Fail{p2State = END}
 		-> P2()
