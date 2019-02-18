@@ -1,4 +1,4 @@
-﻿#import "PAT.Math";
+#import "PAT.Math";
 
 
 /***** Constants *****/
@@ -80,6 +80,7 @@ var confirmation;
 var generatedPrivate;
 var generatedSignature;
 var auth;
+var trustedContract = EMPTY;
 
 // Router and Attacker
 var routerState = EMPTY;
@@ -182,7 +183,8 @@ P1SendSign() =
 	-> p1Terminate{p1State = QUIT}
 	-> P1();
 
-P1ReceiveSign() = routerToP1?src.dest.msgtype.data1.data2.ct -> P1ReceiveSignAction(src, dest, msgtype, data1, data2, ct);
+P1ReceiveSign() = routerToP1?src.dest.msgtype.data1.data2.ct 
+-> P1ReceiveSignAction(src, dest, msgtype, data1, data2, ct);
 
 P1ReceiveSignAction(src, dest, msgtype, data1, data2, ct)=
 	if (msgtype != SIGNTYPE || ct != CONTRACT || data1 == EMPTY || call(Pow, data1, P2PUBLIC) % P2MOD != CONTRACT)
@@ -258,7 +260,8 @@ P2SendPromise() =
 	-> p2Terminate{p2State = QUIT}
 	-> P2();
 
-P2ReceiveSign() = routerToP2?src.dest.msgtype.data1.data2.ct -> P2ReceiveSignAction(src, dest, msgtype, data1, data2, ct);
+P2ReceiveSign() = routerToP2?src.dest.msgtype.data1.data2.ct 
+	-> P2ReceiveSignAction(src, dest, msgtype, data1, data2, ct);
 
 P2ReceiveSignAction(src, dest, msgtype, data1, data2, ct) =
 	if(msgtype != SIGNTYPE || ct != CONTRACT || data1 == EMPTY || call(Pow, data1, P1PUBLIC) % P1MOD != CONTRACT)
@@ -302,19 +305,20 @@ TrustedParty() = routerToTrusted?src.dest.msgtype.data1.data2.ct
 	-> TrustedPartyAction(src, dest, msgtype, data1, data2, ct);
 	
 TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
-	if (trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2) 
+	if ((trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2) && trustedContract == ct) 
 	{
-		trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.EMPTY.EMPTY.CONTRACT
+		trustedToRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.CONTRACT
 		-> TrustedParty()
 	} 
-	else if (trustedStatus == ABORTED)
+	else if (trustedStatus == ABORTED && trustedContract == ct)
 	{
-		trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.EMPTY.EMPTY.CONTRACT
+		trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.confirmation.EMPTY.CONTRACT
 		-> TrustedParty()
 	}
 	else if (msgtype == ABORTTYPE)
 	{
 		setStatusAbort{trustedStatus = ABORTED}
+		-> storeContract{trustedContract = ct}
 		-> generateAbortConfirmation{confirmation = call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
 		-> trustedToRouter!TRUSTEDIP.src.ABORTCONFIRMATION.confirmation.EMPTY.CONTRACT
 		-> TrustedParty()
@@ -322,6 +326,7 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
 	else if(msgtype == RESOLVE2TYPE)
 	{
 		setStatusResolved2{trustedStatus = RESOLVED2}
+		-> storeContract{trustedContract = ct}
 		-> generateP1Private{generatedPrivate = call(Pow, data2, TRUSTPRIVATE) % TRUSTMOD}
 		-> generateP1Signature{generatedSignature = call(Pow, CONTRACT, generatedPrivate) % P1MOD}
 		-> generateResolve2Confirmation{confirmation = call(Pow, generatedSignature, TRUSTPRIVATE) % TRUSTMOD}
@@ -332,6 +337,7 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
 	else if(msgtype == RESOLVE1TYPE)
 	{
 		setStatusResolved1{trustedStatus = RESOLVED1}
+		-> storeContract{trustedContract = ct}
 		-> generateP2Private{generatedPrivate=call(Pow,data2,TRUSTPRIVATE)%TRUSTMOD}
 		-> generateP2Signature{generatedSignature=call(Pow,CONTRACT,generatedPrivate)%P2MOD}
 		-> generateResolved1Confirmation{confirmation=call(Pow,generatedSignature,TRUSTPRIVATE)%TRUSTMOD}
