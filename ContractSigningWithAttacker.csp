@@ -422,6 +422,8 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #define withattacker (routerState == ATTACKER);
 
 /***** Implementation Checking *****/
+/* Should pass if our implementation of the protocol is correct */
+
 // 1. P2 only sends promise when it receives valid P1 promise
 #define p2receivesbadpromise (p2RecPromise != p1Promise && p2State != QUIT);
 #define p2sendpromise (p2State == RECSIGN);
@@ -433,6 +435,8 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #assert System |= []([]p1receivesbadpromise && noattacker -> !p1sendsign);
 
 /***** Protocol Verification *****/
+/* Should pass if protocol works as described */
+
 // 3. Both processes eventually end or quit
 #define processesend (p1State == END || p1State == QUIT) && (p2State == QUIT || p2State == END);
 #assert System reaches processesend;
@@ -467,9 +471,11 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #assert System |= [](trustedstatusabort && noattacker -> <>abortconfirmation);
 
 /***** Protocol Verification with Attacker *****/
-// 10. With attacker, assertion 4. no longer holds
+/* Should pass if protocol works as described with an attacker */
+
+// 10. Assertion 4 with attacker
 #assert System |= [](p1sendsign && withattacker -> <>bothreceivesign);
 
-// 11. 12. With attacker, assertion 5. and 6. no longer hold
+// 11. 12. Assertion 5 and 6 with attacker
 #assert System |= []([]p1receivep2promise && withattacker -> <>p1receivep2sign);
 #assert System |= []([]p2receivep1promise && withattacker -> <>p2receivep1sign);
