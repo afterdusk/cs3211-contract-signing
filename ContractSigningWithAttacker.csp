@@ -429,6 +429,10 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #define p2sendpromise (p2State == RECSIGN);
 #assert System |= []([]p2receivesbadpromise && noattacker -> !p2sendpromise);
 
+// TODO: Better way to do the above
+#define p2receivesgoodpromise (p2RecPromise == p1Promise && p2State != QUIT);
+#assert System |= [](p2sendpromise -> p2receivesgoodpromise);
+
 // 2. P1 only sends signature when it receives valid P2 Promise
 #define p1receivesbadpromise (p1RecPromise != p2Promise && p1State != QUIT);
 #define p1sendsign (p1State == RECSIGN);
@@ -437,6 +441,7 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 /***** Protocol Verification *****/
 /* Should pass if protocol works as described */
 
+// TODO: The "reaches" operator only checks for existence of one branch that satisfies
 // 3. Both processes eventually end or quit
 #define processesend (p1State == END || p1State == QUIT) && (p2State == QUIT || p2State == END);
 #assert System reaches processesend;
@@ -467,7 +472,7 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #define abortconfirmation (p1TrustedConfirmation == call(Pow, p1Promise, TRUSTPRIVATE) % TRUSTMOD);
 #assert System |= [](trustedstatusresolve -> []!abortconfirmation);
 
-// 9. After trusted party has aborted, 
+// 9. After trusted party has aborted, P1 will eventually receive abort confirmation
 #assert System |= [](trustedstatusabort && noattacker -> <>abortconfirmation);
 
 /***** Protocol Verification with Attacker *****/
