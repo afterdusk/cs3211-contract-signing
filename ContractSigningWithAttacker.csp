@@ -56,6 +56,7 @@
 #define RESOLVE2TYPE -6;
 #define ABORTCONFIRMATION -7;
 #define RESOLVECONFIRMATION -8;
+#define INVALIDCONFIRMATION -9;
 
 /***** Global Variables *****/
 // P1
@@ -195,10 +196,7 @@ P1ReceiveSign() = routerToP1?src.dest.msgtype.data1.data2.ct
 -> P1ReceiveSignAction(src, dest, msgtype, data1, data2, ct);
 
 P1ReceiveSignAction(src, dest, msgtype, data1, data2, ct)=
-	if (msgtype != SIGNTYPE || 
-		ct != CONTRACT ||
-		data1 == EMPTY ||
-		call(Pow, data1, P2PUBLIC) % P2MOD != CONTRACT)
+	if (msgtype != SIGNTYPE || ct != CONTRACT || data1 == EMPTY || call(Pow, data1, P2PUBLIC) % P2MOD != CONTRACT)
 	{
 		// send resolve1 if invalid sign received
 		toRouter!P1IP.TRUSTEDIP.RESOLVE1TYPE.p1Sign.p1RecPromise.CONTRACT
@@ -347,7 +345,7 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
 		-> toRouter!TRUSTEDIP.src.ABORTCONFIRMATION.confirmation.EMPTY.CONTRACT
 		-> TrustedParty()
 	}
-	else if(msgtype == RESOLVE2TYPE)
+	else if(msgtype == RESOLVE2TYPE && call(Pow,data1,P2PUBLIC) % P2MOD == CONTRACT)
 	{
 		setStatusResolved2{trustedStatus = RESOLVED2}
 		-> storeContract{trustedContract = ct}
@@ -358,7 +356,7 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
 		-> toRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.CONTRACT
 		-> TrustedParty()
 	}
-	else if(msgtype == RESOLVE1TYPE)
+	else if(msgtype == RESOLVE1TYPE && call(Pow,data1,P1PUBLIC) % P1MOD == CONTRACT)
 	{
 		setStatusResolved1{trustedStatus = RESOLVED1}
 		-> storeContract{trustedContract = ct}
@@ -367,6 +365,11 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
 		-> generateResolved1Confirmation{confirmation=call(Pow,generatedSignature,TRUSTPRIVATE)%TRUSTMOD}
 		-> generateAuth{auth=call(Pow, data1, TRUSTPRIVATE) % TRUSTMOD}
 		-> toRouter!TRUSTEDIP.src.RESOLVECONFIRMATION.confirmation.auth.CONTRACT
+		-> TrustedParty()
+	}
+	else
+	{
+		toRouter!TRUSTEDIP.src.INVALIDCONFIRMATION.EMPTY.EMPTY.EMPTY
 		-> TrustedParty()
 	};
 	
