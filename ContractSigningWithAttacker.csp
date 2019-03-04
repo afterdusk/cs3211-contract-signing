@@ -138,8 +138,8 @@ P1SendPromise() =
 	-> p1SetStateRP{p1State = RECPROMISE}
 	-> P1()
 	[]
-	toRouter!P1IP.P2IP.PROMISETYPE.EMPTY.EMPTY.EMPTY
-	-> p1Terminate{p1State = QUIT}
+	p1Terminate{p1State = QUIT}
+	-> toRouter!P1IP.P2IP.PROMISETYPE.EMPTY.EMPTY.EMPTY 
 	-> P1();
 	
 P1ReceivePromise() = routerToP1?src.dest.msgtype.data1.data2.ct 
@@ -187,8 +187,8 @@ P1SendSign() =
 	-> p1SetStateRS{p1State = RECSIGN}
 	-> P1()
 	[]
-	toRouter!P1IP.P2IP.SIGNTYPE.EMPTY.EMPTY.EMPTY
-	-> p1Terminate{p1State = QUIT}
+	p1Terminate{p1State = QUIT}
+	-> toRouter!P1IP.P2IP.SIGNTYPE.EMPTY.EMPTY.EMPTY
 	-> P1();
 
 P1ReceiveSign() = routerToP1?src.dest.msgtype.data1.data2.ct 
@@ -275,8 +275,8 @@ P2SendPromise() =
 	-> p2SetStateRS{p2State = RECSIGN}
 	-> P2()
 	[]
-	toRouter!P2IP.P1IP.PROMISETYPE.EMPTY.EMPTY.EMPTY
-	-> p2Terminate{p2State = QUIT}
+	p2Terminate{p2State = QUIT}
+	-> toRouter!P2IP.P1IP.PROMISETYPE.EMPTY.EMPTY.EMPTY 
 	-> P2();
 
 P2ReceiveSign() = routerToP2?src.dest.msgtype.data1.data2.ct 
@@ -320,8 +320,8 @@ P2SendSign() =
 	-> p2SetStateE{p2State = END}
 	-> P2()
 	[]
-	toRouter!P2IP.P1IP.SIGNTYPE.EMPTY.EMPTY.EMPTY
-	-> p2Terminate{p2State = QUIT}
+	p2Terminate{p2State = QUIT}
+	-> toRouter!P2IP.P1IP.SIGNTYPE.EMPTY.EMPTY.EMPTY 
 	-> P2();
 
 // Trusted Party
