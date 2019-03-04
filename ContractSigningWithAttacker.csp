@@ -21,8 +21,8 @@
 #define RESOLVED2 4;
 
 // Router and Attacker states
-#define SECURE -1;
-#define ATTACKER -2;
+#define SECURE -10;
+#define ATTACKER -20;
 
 // P1 keys
 #define P1PUBLIC 7;
@@ -170,7 +170,7 @@ P1ReceiveTrustedAbortConfirmation(src, dest, msgtype, data1, data2, ct) =
 		p1AbortFail{p1State = END}
 		-> P1()
 	}
-	if (msgtype == RESOLVECONFIRMATION)
+	else if (msgtype == RESOLVECONFIRMATION)
 	{
 		p1GetP2Sign{p1RecSign = call(Pow, data1, TRUSTPUBLIC) % TRUSTMOD}
 		-> p1SetStateE{p1State = END}
@@ -486,6 +486,9 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 // 9. After trusted party has aborted, P1 will eventually receive abort confirmation
 #assert System |= [](trustedstatusabort && noattacker -> <>abortconfirmation);
 
+#define trustedidle (trustedStatus == INIT);
+#define bothnoquit (p1State != QUIT && p2State != QUIT);
+#assert System |= [](noattacker && bothnoquit -> trustedidle);
 /***** Protocol Verification with Attacker *****/
 /* Should pass if protocol works as described with an attacker */
 
