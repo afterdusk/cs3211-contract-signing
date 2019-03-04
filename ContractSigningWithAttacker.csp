@@ -83,6 +83,7 @@ var generatedPrivate;
 var generatedSignature;
 var auth;
 var trustedContract = EMPTY;
+var trustedResolveSign;
 
 // Router and Attacker
 var routerState = EMPTY;
@@ -348,7 +349,8 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
 	}
 	else if(msgtype == RESOLVE2TYPE && call(Pow, data1, P2PUBLIC) % P2MOD == CONTRACT)
 	{
-		setStatusResolved2{trustedStatus = RESOLVED2}
+		storeP2Signature{trustedResolveSign = data1}
+		-> setStatusResolved2{trustedStatus = RESOLVED2}
 		-> storeContract{trustedContract = ct}
 		-> generateP1Private{generatedPrivate = call(Pow, data2, TRUSTPRIVATE) % TRUSTMOD}
 		-> generateP1Signature{generatedSignature = call(Pow, CONTRACT, generatedPrivate) % P1MOD}
@@ -359,7 +361,8 @@ TrustedPartyAction(src, dest, msgtype, data1, data2, ct) =
 	}
 	else if(msgtype == RESOLVE1TYPE && call(Pow, data1, P1PUBLIC) % P1MOD == CONTRACT)
 	{
-		setStatusResolved1{trustedStatus = RESOLVED1}
+		storeP1Signature{trustedResolveSign = data1}
+		-> setStatusResolved1{trustedStatus = RESOLVED1}
 		-> storeContract{trustedContract = ct}
 		-> generateP2Private{generatedPrivate = call(Pow, data2, TRUSTPRIVATE) % TRUSTMOD}
 		-> generateP2Signature{generatedSignature = call(Pow, CONTRACT, generatedPrivate) % P2MOD}
@@ -508,7 +511,12 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 // 10. After trusted party has aborted, P1 will eventually receive abort confirmation
 #assert System |= [](trustedstatusabort && noattacker -> <>abortconfirmation);
 
-#define trustedresolve (trustedStatus == RESOLVED1);
+// 11. Trusted party will only resolve if he received a valid requester signature
+#define trustedresolve1 (trustedStatus == RESOLVED1);
+#define trustedreceivevalidp1sign(trustedResolveSign == p1Sign);
+#define trustedresolve2 (trustedStatus == RESOLVED2);
+#define trustedreceivevalidp2sign(trustedResolveSign == p2Sign);
+#assert System |= []((trustedresolve1 -> trustedreceivevalidp1sign) && (trustedresolve2 -> trustedreceivevalidp2sign));
 
 /***** DOS Immunity (Protocol Verification) *****/
 /* Should pass if protocol works as described with a DOS attacker */
