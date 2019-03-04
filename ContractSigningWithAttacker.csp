@@ -163,10 +163,12 @@ P1ReceivePromiseAction(src, dest, msgtype, data1, data2, ct) =
 	};
 	
 P1ReceiveTrustedAbortConfirmation(src, dest, msgtype, data1, data2, ct) =
-	if (msgtype == ABORTCONFIRMATION && p1Promise!= call(Pow,data1,TRUSTPRIVATE)%TRUSTMOD)
+	if (msgtype == ABORTCONFIRMATION && p1Promise == call(Pow,data1,TRUSTPRIVATE)%TRUSTMOD)
 	{
-		p1AbortFail{p1State = END}
+		StoreAbortConfirmation{p1TrustedConfirmation = data1} 
+		-> p1SetStateE{p1State = END}
 		-> P1()
+
 	}
 	else if (msgtype == RESOLVECONFIRMATION)
 	{
@@ -174,10 +176,9 @@ P1ReceiveTrustedAbortConfirmation(src, dest, msgtype, data1, data2, ct) =
 		-> p1SetStateE{p1State = END}
 		-> P1()
 	}
-	else if (msgtype == ABORTCONFIRMATION)
+	else
 	{
-		p1StoreAbortConfirmation{p1TrustedConfirmation = data1} 
-		-> p1SetStateE{p1State = END}
+		p1AbortFail{p1State = END}
 		-> P1()
 	};
 	
