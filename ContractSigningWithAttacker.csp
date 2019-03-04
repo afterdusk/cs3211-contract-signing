@@ -165,9 +165,15 @@ P1ReceivePromiseAction(src, dest, msgtype, data1, data2, ct) =
 	};
 	
 P1ReceiveTrustedAbortConfirmation(src, dest, msgtype, data1, data2, ct) =
-	if (msgtype == RESOLVECONFIRMATION || p1Promise!= call(Pow,data1,TRUSTPRIVATE)%TRUSTMOD )
+	if (p1Promise!= call(Pow,data1,TRUSTPRIVATE)%TRUSTMOD)
 	{
 		p1AbortFail{p1State = END}
+		-> P1()
+	}
+	if (msgtype == RESOLVECONFIRMATION)
+	{
+		p1GetP2Sign{p1RecSign = call(Pow, data1, TRUSTPUBLIC) % TRUSTMOD}
+		-> p1SetStateE{p1State = END}
 		-> P1()
 	}
 	else if (msgtype == ABORTCONFIRMATION)
