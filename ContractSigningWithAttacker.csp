@@ -150,9 +150,12 @@ P1ReceivePromise() = routerToP1?src.dest.msgtype.data1.data2.ct
 P1ReceivePromiseAction(src, dest, msgtype, data1, data2, ct) =
 	if (msgtype != PROMISETYPE || ct != CONTRACT || data1 == EMPTY)
 	{
-		p1ToRouter!P1IP.TRUSTEDIP.ABORTTYPE.p1Promise.EMPTY.CONTRACT // send abort if invalid promise received
-		-> routerToP1?f1.f2.f3.f4.f5.f6 // receive abort confirmation from trusted party
-		-> P1ReceiveTrustedAbortConfirmation(f1, f2, f3, f4, f5, f6) // validate abort confirmation
+		// send abort if invalid promise received
+		p1ToRouter!P1IP.TRUSTEDIP.ABORTTYPE.p1Promise.EMPTY.CONTRACT
+		// receive abort confirmation from trusted party
+		-> routerToP1?f1.f2.f3.f4.f5.f6
+		// validate abort confirmation
+		-> P1ReceiveTrustedAbortConfirmation(f1, f2, f3, f4, f5, f6)
 	}
 	else
 	{
@@ -187,11 +190,17 @@ P1ReceiveSign() = routerToP1?src.dest.msgtype.data1.data2.ct
 -> P1ReceiveSignAction(src, dest, msgtype, data1, data2, ct);
 
 P1ReceiveSignAction(src, dest, msgtype, data1, data2, ct)=
-	if (msgtype != SIGNTYPE || ct != CONTRACT || data1 == EMPTY || call(Pow, data1, P2PUBLIC) % P2MOD != CONTRACT)
+	if (msgtype != SIGNTYPE || 
+		ct != CONTRACT ||
+		data1 == EMPTY ||
+		call(Pow, data1, P2PUBLIC) % P2MOD != CONTRACT)
 	{
-		p1ToRouter!P1IP.TRUSTEDIP.RESOLVE1TYPE.p1Sign.p1RecPromise.CONTRACT // send resolve1 if invalid sign received
-		-> routerToP1?f1.f2.f3.f4.f5.f6 // receive resolve1 confirmation from trusted party
-		-> P1ReceiveTrustedResolve1Confirmation(f1, f2, f3, f4, f5, f6) // validate resolve1 confirmation
+		// send resolve1 if invalid sign received
+		p1ToRouter!P1IP.TRUSTEDIP.RESOLVE1TYPE.p1Sign.p1RecPromise.CONTRACT
+		// receive resolve1 confirmation from trusted party
+		-> routerToP1?f1.f2.f3.f4.f5.f6
+		// validate resolve1 confirmation
+		-> P1ReceiveTrustedResolve1Confirmation(f1, f2, f3, f4, f5, f6) 
 	}
 	else
 	{
@@ -381,14 +390,14 @@ Forward(src, dest, msgtype, data1, data2, ct) =
 	};
 	
 Attacker() =
-	p1ToRouter?src.dest.msgtype.data1.data2.ct -> AttackerForward(src, dest, msgtype, data1, data2, ct)
+	p1ToRouter?src.dest.msgtype.data1.data2.ct -> Attack(src, dest, msgtype, data1, data2, ct)
 	[]
-	p2ToRouter?src.dest.msgtype.data1.data2.ct -> AttackerForward(src, dest, msgtype, data1, data2, ct)
+	p2ToRouter?src.dest.msgtype.data1.data2.ct -> Attack(src, dest, msgtype, data1, data2, ct)
 	[]
-	trustedToRouter?src.dest.msgtype.data1.data2.ct -> AttackerForward(src, dest, msgtype, data1, data2, ct);
+	trustedToRouter?src.dest.msgtype.data1.data2.ct -> Attack(src, dest, msgtype, data1, data2, ct);
 
 
-AttackerForward(src, dest, msgtype, data1, data2, ct) =
+Attack(src, dest, msgtype, data1, data2, ct) =
 	if(dest == P2IP)
 	{
 		routerToP2!src.dest.msgtype.data1.data2.ct
@@ -440,7 +449,7 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 // TODO: The "reaches" operator only checks for existence of one branch that satisfies
 // 3. Both processes eventually end or quit
 #define processesend (p1State == END || p1State == QUIT) && (p2State == QUIT || p2State == END);
-#assert System reaches processesend;
+#assert System |= <>processesend;
 
 // 4. If P1 sends signature, both parties will eventually get signature
 #define bothreceivesign (p1RecSign == p2Sign && p2RecSign == p1Sign);
