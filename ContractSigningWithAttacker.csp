@@ -463,7 +463,7 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 
 // 3. Both processes eventually end or quit
 #define processesend (p1State == END || p1State == QUIT) && (p2State == QUIT || p2State == END);
-#assert System |= (noattacker -> <>processesend);
+#assert System |= [](noattacker -> <>processesend);
 
 
 /***** Fairness (Protocol Verification) *****/
@@ -519,12 +519,12 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 /***** DOS Immunity (Protocol Verification) *****/
 /* Should pass if protocol works as described with a DOS attacker */
 
-// 11. Assertion 4 with attacker
+// 11. Assertion 4 with attacker (Fairness)
 #assert System |= [](p1sendsign && withattacker -> <>bothreceivesign);
 
-// 12. 13. Assertion 5 and 6 with attacker
+// 12. 13. Assertion 5 and 6 with attacker (Fairness)
 #assert System |= []([]p1receivep2promise && withattacker -> <>p1receivep2sign);
 #assert System |= []([]p2receivep1promise && withattacker -> <>p2receivep1sign);
 
-// 14. Assertion 3 with attacker
-#assert System |= (noattacker -> <>processesend);
+// 14. Assertion 3 with attacker (Completeness)
+#assert System |= [](withattacker -> <>processesend);
