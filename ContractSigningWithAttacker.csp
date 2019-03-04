@@ -485,11 +485,21 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #define p2receivep1sign (p2RecSign == p1Sign);
 #assert System |= []([]p2receivep1promise && noattacker -> <>p2receivep1sign);
 
+// 7. If trusted party has once aborted, neither party will receive signature
+#define trustedstatusaborted (trustedStatus == ABORTED);
+#assert System |= [](trustedstatusaborted -> []!bothreceivesign);
+
+// 8. If trusted party has once resolved, he will not entertain aborts
+#define trustedstatusresolve (trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2);
+#define trustedstatusabort (trustedStatus == ABORTED);
+#define abortconfirmation (p1TrustedConfirmation == call(Pow, p1Promise, TRUSTPRIVATE) % TRUSTMOD);
+#assert System |= [](trustedstatusresolve -> []!abortconfirmation);
+
 
 /***** Optimism (Protocol Verification) *****/
 /* Should pass if protocol works as described */
 
-// 7. If there are no interruptions, trusted party will remain in INIT state
+// 9. If there are no interruptions, trusted party will remain in INIT state
 #define trustedinit (trustedStatus == INIT);
 #define bothnoquit (p1State != QUIT && p2State != QUIT);
 #assert System |= [](bothnoquit && noattacker -> trustedinit);
@@ -498,25 +508,14 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 /***** Abusefree (Protocol Verification) *****/
 /* Should pass if protocol works as described */
 
-// 8. If trusted party has once aborted, neither party will receive signature
-#define trustedstatusaborted (trustedStatus == ABORTED);
-#assert System |= [](trustedstatusaborted -> []!bothreceivesign);
-
-// 9. If trusted party has once resolved, he will not entertain aborts
-#define trustedstatusresolve (trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2);
-#define trustedstatusabort (trustedStatus == ABORTED);
-#define abortconfirmation (p1TrustedConfirmation == call(Pow, p1Promise, TRUSTPRIVATE) % TRUSTMOD);
-#assert System |= [](trustedstatusresolve -> []!abortconfirmation);
-
-// 10. After trusted party has aborted, P1 will eventually receive abort confirmation
-#assert System |= [](trustedstatusabort && noattacker -> <>abortconfirmation);
-
-// 11. Trusted party will only resolve if he received a valid requester signature
+// 10. Trusted party will only resolve if he received a valid requester signature
 #define trustedresolve1 (trustedStatus == RESOLVED1);
 #define trustedreceivevalidp1sign(trustedResolveSign == p1Sign);
 #define trustedresolve2 (trustedStatus == RESOLVED2);
 #define trustedreceivevalidp2sign(trustedResolveSign == p2Sign);
-#assert System |= []((trustedresolve1 -> trustedreceivevalidp1sign) && (trustedresolve2 -> trustedreceivevalidp2sign));
+#assert System |= []((trustedresolve1 -> trustedreceivevalidp1sign) && 
+					(trustedresolve2 -> trustedreceivevalidp2sign));
+
 
 /***** DOS Immunity (Protocol Verification) *****/
 /* Should pass if protocol works as described with a DOS attacker */
