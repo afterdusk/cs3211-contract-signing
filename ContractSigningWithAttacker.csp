@@ -491,7 +491,6 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 
 // 8. If trusted party has once resolved, he will not entertain aborts
 #define trustedstatusresolve (trustedStatus == RESOLVED1 || trustedStatus == RESOLVED2);
-#define trustedstatusabort (trustedStatus == ABORTED);
 #define abortconfirmation (p1TrustedConfirmation == call(Pow, p1Promise, TRUSTPRIVATE) % TRUSTMOD);
 #assert System |= [](trustedstatusresolve -> []!abortconfirmation);
 
