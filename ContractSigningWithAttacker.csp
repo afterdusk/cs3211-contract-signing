@@ -226,6 +226,11 @@ P1ReceiveTrustedResolve1Confirmation(src, dest, msgtype, data1, data2, ct) =
 		-> p1GetP2Sign{p1RecSign = call(Pow, p1TrustedConfirmation, TRUSTPUBLIC) % TRUSTMOD}
 		-> p1SetStateE{p1State = END}
 		-> P1()
+	}
+	else 
+	{
+		resolve1FailDefault{p1State = END}
+		->P1()
 	};
 
 
@@ -302,6 +307,11 @@ P2ReceiveTrustedResolve2Confirmation(src, dest, msgtype, data1, data2, ct) =
 		p2StoreResolve2Confirmation{p2TrustedConfirmation = data1}
 		-> p2GetP1Sign{p2RecSign = call(Pow, p2TrustedConfirmation, TRUSTPUBLIC) % TRUSTMOD}
 		-> p2SetStateE{p2State = END}
+		-> P2()
+	}
+	else 
+	{
+		resolve2FailDefault{p2State = END}
 		-> P2()
 	};
 
