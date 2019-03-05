@@ -285,9 +285,12 @@ P2ReceiveSign() = routerToP2?src.dest.msgtype.data1.data2.ct
 P2ReceiveSignAction(src, dest, msgtype, data1, data2, ct) =
 	if(msgtype != SIGNTYPE || ct != CONTRACT || data1 == EMPTY || call(Pow, data1, P1PUBLIC) % P1MOD != CONTRACT)
 	{	
-		toRouter!P2IP.TRUSTEDIP.RESOLVE2TYPE.p2Sign.p2RecPromise.CONTRACT // send resolve2 if invalid sign received
-		-> routerToP2?f1.f2.f3.f4.f5.f6 // receive resolve2 confirmation from trusted party
-		-> P2ReceiveTrustedResolve2Confirmation(f1, f2, f3, f4, f5, f6) // validate resolve2 confirmation
+		// send resolve2 if invalid sign received
+		toRouter!P2IP.TRUSTEDIP.RESOLVE2TYPE.p2Sign.p2RecPromise.CONTRACT
+		// receive resolve2 confirmation from trusted party
+		-> routerToP2?f1.f2.f3.f4.f5.f6
+		// validate resolve2 confirmation
+		-> P2ReceiveTrustedResolve2Confirmation(f1, f2, f3, f4, f5, f6)
 	}
 	else
 	{
@@ -441,10 +444,11 @@ Attack(src, dest, msgtype, data1, data2, ct) =
 
 System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 
+/***** Assertions *****/
 #define noattacker (routerState == SECURE);
 #define withattacker (routerState == ATTACKER);
 
-/***** Correctness (Implementation Checking) *****/
+/*** Correctness (Implementation Checking) ***/
 /* Should pass if our implementation of the protocol is correct */
 
 // 1. P2 only sends promise when it receives valid P1 promise
@@ -458,7 +462,7 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #assert System |= [](p1sendsign -> p1receivesgoodpromise);
 
 
-/***** Completeness (Protocol Verification) *****/
+/*** Completeness (Protocol Verification) ***/
 /* Should pass if protocol works as described */
 
 // 3. Both processes eventually end or quit
@@ -466,7 +470,7 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #assert System |= [](noattacker -> <>processesend);
 
 
-/***** Fairness (Protocol Verification) *****/
+/*** Fairness (Protocol Verification) ***/
 /* Should pass if protocol works as described */
 
 // 4. If P1 sends signature, both parties will eventually get signature
@@ -495,7 +499,7 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #assert System |= [](trustedstatusresolve -> []!abortconfirmation);
 
 
-/***** Optimism (Protocol Verification) *****/
+/*** Optimism (Protocol Verification) ***/
 /* Should pass if protocol works as described */
 
 // 9. If there are no interruptions, trusted party will remain in INIT state
@@ -504,7 +508,7 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 #assert System |= [](bothnoquit && noattacker -> trustedinit);
 
 
-/***** Abusefree (Protocol Verification) *****/
+/*** Abusefree (Protocol Verification) ***/
 /* Should pass if protocol works as described */
 
 // 10. Trusted party will only resolve if he received a valid requester signature
@@ -516,7 +520,7 @@ System() = P1() ||| P2() ||| TrustedParty() ||| RouterSelector();
 					(trustedresolve2 -> trustedreceivevalidp2sign));
 
 
-/***** DOS Immunity (Protocol Verification) *****/
+/*** DOS Immunity (Protocol Verification) ***/
 /* Should pass if protocol works as described with a DOS attacker */
 
 // 11. Assertion 4 with attacker (Fairness)
