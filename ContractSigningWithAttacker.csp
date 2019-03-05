@@ -97,7 +97,7 @@ channel routerToP2 10;
 channel routerToTrusted 10;
 
 
-/***** Message encoding style *****/
+/***** Message Encoding Guide *****/
 /*
 	Msgtype:	Promise		Sign		Abort		Resolve1		Resolve2
 	field 1:	Source IP(always)------------------------------------------------ 		
@@ -116,6 +116,8 @@ channel routerToTrusted 10;
 	field 6: 	CONTRACT(always)-------------------------------------------------
 */
 
+
+/***** Processes *****/
 // P1
 P1() =
 	[p1State == GENERATE]P1GenerateValues()
@@ -249,8 +251,8 @@ P2() =
 	[p2State == END || p2State == QUIT]Skip;
 
 P2GenerateValues() =
-	p2GeneratePromise{p2Promise = call(Pow,P2PRIVATE,TRUSTPUBLIC) % TRUSTMOD}
-	-> p2GenerateSignature{p2Sign = call(Pow,CONTRACT,P2PRIVATE) % P2MOD}
+	p2GeneratePromise{p2Promise = call(Pow, P2PRIVATE, TRUSTPUBLIC) % TRUSTMOD}
+	-> p2GenerateSignature{p2Sign = call(Pow, CONTRACT, P2PRIVATE) % P2MOD}
 	-> p2SetStateRP{p2State = RECPROMISE}
 	-> P2();
 	
@@ -300,7 +302,7 @@ P2ReceiveSignAction(src, dest, msgtype, data1, data2, ct) =
 	};
 	
 P2ReceiveTrustedResolve2Confirmation(src, dest, msgtype, data1, data2, ct) =
-	if(msgtype == ABORTCONFIRMATION||call(Pow,data2,TRUSTPUBLIC)% TRUSTMOD != p2Sign)
+	if(msgtype == ABORTCONFIRMATION||call(Pow, data2, TRUSTPUBLIC) % TRUSTMOD != p2Sign)
 	{
 		resolve2Fail{p2State = END}
 		-> P2()
